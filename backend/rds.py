@@ -104,3 +104,13 @@ class FacturacionPostgres:
     def asignar(self, servicios, caracteristicas):
         self.cursor.execute("CALL asignar_caracteristicas(%s,%s::integer[],%s::integer[])", (self.usuario, servicios, caracteristicas))
 
+    def saldos(self):
+        self.cursor.execute("CALL antiguedad_saldos(%s,NULL)", (self.usuario,))
+        reporte = estructura(self.cursor.fetchone()[0])
+        for fila in reporte:
+            fila["saldo"] = centavos(fila["saldo"])
+        return reporte
+
+    def cerrar(self, fecha, mensual):
+        self.cursor.execute("CALL cerrar_periodo(%s,%s,%s,NULL)", (self.usuario, fecha, mensual))
+        return centavos(self.cursor.fetchone()[0])
