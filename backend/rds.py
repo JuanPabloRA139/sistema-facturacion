@@ -35,3 +35,26 @@ def centavos(valor):
     return int(Decimal(str(valor)) * 100)
 
 
+def comprobante(cursor, usuario, folio):
+    cursor.execute("CALL generar_comprobante(%s,%s,NULL)", (usuario, folio))
+    f = estructura(cursor.fetchone()[0])
+    f["id"] = f.pop("folio")
+    f["cliente_nombre"] = f.pop("cliente")
+    for k in ("subtotal", "descuento", "iva", "retencion", "total", "pagado", "saldo"):
+        f[k] = centavos(f[k])
+    for linea in f["conceptos"]:
+        linea["precio"] = centavos(linea["precio"])
+    return f
+
+
+def preparar_actor(cursor, usuario, consultar_rol):
+    cursor.execute("SELECT pg_advisory_xact_lock_shared(hashtextextended(%s, 0))", (usuario,))
+    rol = consultar_rol(usuario)
+    cursor.execute("SELECT rol FROM usuarios_roles WHERE usuario_id=%s", (usuario,))
+    proyeccion = cursor.fetchone()
+    if proyeccion is None or proyeccion[0] != rol:
+        raise PermissionError
+    cursor.execute("SELECT set_config('facturacion.actor',%s,true)", (usuario,))
+    return rol
+
+
