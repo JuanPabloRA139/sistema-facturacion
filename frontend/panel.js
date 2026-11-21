@@ -36,3 +36,18 @@ function nodo(tipo,texto){const n=document.createElement(tipo); n.textContent=te
 function boton(texto,accion){
   const b=nodo('button',texto); b.type='button'; b.onclick=()=>tarea(accion,b); return b;
 }
+async function tarea(accion,control){
+  if(pendiente) return;
+  pendiente=true; mensaje('');
+  const bloques=['acceso','retomar','trabajo','menu','perfil','salida'].map(el);
+  bloques.forEach(b=>b.inert=true);
+  const etiqueta=control?.textContent;
+  if(control){control.disabled=true;control.textContent='En proceso…';}
+  try {await accion();}
+  catch(e){mensaje(e.message,true);}
+  finally {
+    pendiente=false; bloques.forEach(b=>b.inert=false);
+    if(control){control.disabled=false;control.textContent=etiqueta;}
+    if(datos) actualizarResumen();
+  }
+}
