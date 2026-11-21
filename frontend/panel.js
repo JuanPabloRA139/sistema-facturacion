@@ -73,3 +73,21 @@ function confirmar(titulo,detalle,etiqueta){
   d.returnValue='volver';
   return new Promise(resolve=>{d.addEventListener('close',()=>resolve(d.returnValue==='aceptar'),{once:true});d.showModal();});
 }
+function tabla(registros,seleccionar){
+  if(!registros.length)return nodo('p','Sin registros.');
+  const t=document.createElement('table'), encabezado=t.createTHead().insertRow();
+  const campos=Object.keys(registros[0]);
+  campos.forEach(k=>encabezado.append(nodo('th',k.replaceAll('_',' '))));
+  if(seleccionar) encabezado.append(nodo('th','Comprobante'));
+  const body=t.createTBody();
+  for(const fila of registros){
+    const tr=body.insertRow();
+    for(const k of campos) tr.insertCell().textContent=importes.has(k)?moneda(fila[k]):fila[k];
+    if(seleccionar) tr.insertCell().append(boton('Ver',async()=>seleccionar(fila.id)));
+  }
+  return t;
+}
+function mostrar(titulo,contenido){
+  el('salida').hidden=false; el('titulo').textContent=titulo; el('resultado').replaceChildren(contenido);
+  el('salida').scrollIntoView({block:'nearest'});
+}
