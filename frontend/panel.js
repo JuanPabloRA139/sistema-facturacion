@@ -158,3 +158,24 @@ el('salir').onclick=()=>tarea(async()=>{
   if(window.accesoAWS) return window.accesoAWS.salir();
   await api('salir');mostrarAcceso();mensaje('Sesión cerrada.');
 });
+async function cargarSesion(){
+  try {
+    await entrar();
+    el('retomar').hidden=true;
+    if(!envio)mensaje('Sesión iniciada.');
+  } catch(e){
+    if(e.estado===403)mostrarAcceso();
+    if(!e.estado || e.estado>=500){
+      el('retomar').hidden=false;
+      el('acceso').hidden=true;
+      throw new Error('No se pudo cargar el panel. Vuelve a cargar tu sesión.');
+    }
+    throw e;
+  }
+}
+el('retomar').onclick=()=>tarea(cargarSesion,el('retomar'));
+if(el('login'))formulario('login',async(p,form)=>{
+  await api('entrar',p);
+  form.elements.clave.value='';
+  await cargarSesion();
+});
