@@ -35,3 +35,37 @@ class Servidor(ThreadingHTTPServer):
         self.credenciales[usuario]=hashlib.sha256(temporal.encode()).digest()
         return temporal
 
+class Peticion(BaseHTTPRequestHandler):
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(5)
+
+    def log_message(self,*args):
+        pass
+
+    def enviar(self,codigo,contenido,tipo="application/json",cookie=None):
+        if tipo=="application/json":
+            contenido=json.dumps(contenido,ensure_ascii=False).encode()
+        self.send_response(codigo)
+        self.send_header("Content-Type",tipo)
+        self.send_header("Content-Length",str(len(contenido)))
+        self.send_header("Cache-Control","no-store")
+        self.send_header("X-Content-Type-Options","nosniff")
+        self.send_header("Permissions-Policy","camera=(), microphone=(), geolocation=()")
+        self.send_header("X-Frame-Options","DENY")
+        self.send_header("Referrer-Policy","no-referrer")
+        self.send_header("Content-Security-Policy","default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'")
+        if cookie: self.send_header("Set-Cookie",cookie)
+        self.end_headers()
+        self.wfile.write(contenido)
+
+    def host_valido(self):
+        return self.headers.get("Host")==self.server.origen.removeprefix("http://")
+
+    def do_GET(self):
+        if not self.host_valido() or self.path not in ARCHIVOS:
+            return self.enviar(404,{"error":"Recurso desconocido."})
+        archivo=ROOT/"frontend"/ARCHIVOS[self.path]
+        tipos={".html":"text/html",".js":"text/javascript",".css":"text/css"}
+        self.enviar(200,archivo.read_bytes(),tipos[archivo.suffix]+"; charset=utf-8")
+
