@@ -68,3 +68,19 @@ test('Los importes monetarios se convierten exactamente a centavos',async()=>{
 });
 
 
+test('Una sesión aceptada puede recargar el panel sin volver a enviar la clave', async()=>{
+  const {control,contexto,ejecutar}=await panel();
+  let autenticaciones=0,lecturas=0;
+  contexto.autenticar=async()=>{autenticaciones++;};
+  contexto.cargar=async()=>{if(++lecturas===1)throw new Error('Interrupción');};
+  ejecutar('api=autenticar; entrar=cargar;');
+  const form=control('login');
+  form.campos=[['usuario','operador'],['clave','temporal']];form.elements={clave:{value:'temporal'}};
+  form.submit({target:form,submitter:control('enviar'),preventDefault(){}});
+  await new Promise(setImmediate);
+  assert.equal(control('retomar').hidden,false);
+  await control('retomar').onclick();
+  assert.equal(control('retomar').hidden,true);
+  assert.equal(autenticaciones,1);
+  assert.equal(lecturas,2);
+});
