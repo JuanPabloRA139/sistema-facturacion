@@ -87,3 +87,20 @@ class FacturacionPostgres:
                             (self.usuario, cliente, str(UUID(clave)), json.dumps(conceptos)))
         return self.cursor.fetchone()[0]
 
+    def comprobante(self, folio):
+        return comprobante(self.cursor, self.usuario, folio)
+
+    def registrar_pago(self, folio, referencia, importe):
+        self.cursor.execute("CALL registrar_pago(%s,%s,%s,%s,NULL,NULL)",
+                            (self.usuario, folio, referencia, Decimal(importe) / 100))
+        return self.cursor.fetchone()[0]
+
+    def cancelar(self, folio, motivo):
+        self.cursor.execute("CALL cancelar_factura(%s,%s,%s)", (self.usuario, folio, motivo))
+
+    def cambiar_tarifa(self, servicio, precio):
+        self.cursor.execute("CALL cambiar_tarifa(%s,%s::integer,%s)", (self.usuario, servicio, Decimal(precio) / 100))
+
+    def asignar(self, servicios, caracteristicas):
+        self.cursor.execute("CALL asignar_caracteristicas(%s,%s::integer[],%s::integer[])", (self.usuario, servicios, caracteristicas))
+
