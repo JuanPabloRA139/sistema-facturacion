@@ -109,3 +109,22 @@ function opciones(select,items,precios=false){
   }
   for(const o of select.options) if(anterior.has(o.value)) o.selected=true;
 }
+function verVista(id){
+  for(const k of Object.keys(vistas)) el(k).hidden=k!==id;
+  el('menu').querySelectorAll('[data-vista]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.vista===id)));
+  el('ruta').textContent=vistas[id]; el('salida').hidden=true;
+}
+async function recargar(){
+  datos=await api('inicio');
+  opciones(el('cliente'),datos.clientes); opciones(el('servicio'),datos.servicios,true);
+  opciones(el('tarifas').elements.servicio,datos.servicios,true);
+  opciones(el('lote').elements.servicios,datos.servicios); opciones(el('lote').elements.caracteristicas,datos.caracteristicas);
+  el('facturas').replaceChildren(tabla(datos.facturas,async id=>verFactura(await api('comprobante',{factura:id}))));
+  actualizarResumen();
+}
+async function realizado(texto){
+  mensaje(texto);
+  try {await recargar();}
+  catch {mensaje(texto+' No se pudo actualizar la vista. Vuelve a entrar para consultarla.',true);}
+}
+const llaveEnvio=()=> 'facturacion:emision:'+datos.usuario;
