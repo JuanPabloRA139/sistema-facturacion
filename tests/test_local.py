@@ -58,6 +58,28 @@ class FlujoHTTP(unittest.TestCase):
                 self.assertIn(motivo, cuerpo["error"])
                 self.assertEqual(clientes(), antes)
 
+    def test_pago_rechazado_explica_el_motivo_y_conserva_el_saldo(self):
+        def enviar(accion, datos, usuario="operador"):
+            return self.peticion(accion, datos, usuario)[:2]
+
+        cliente = enviar("inicio", {})[1]["clientes"][0]["id"]
+        codigo, factura = enviar("emitir", {"cliente": cliente, "clave": "pago-rechazado",
+                                            "conceptos": [{"servicio": 1, "cantidad": 1}]})
+        self.assertEqual(codigo, 200)
+        folio = {"factura": factura["id"]}
+        pago = {**folio, "referencia": "PAGO-01", "importe": factura["saldo"] + 1}
+        codigo, error = enviar("pago", pago)
+        self.assertEqual(codigo, 400)
+        self.assertIn("supera el saldo", error["error"])
+        self.assertEqual(enviar("comprobante", folio)[1]["saldo"], factura["total"])
+
+        self.assertEqual(enviar("cancelar", {**folio, "motivo": "Solicitud del cliente"}, "admin")[0], 200)
+        codigo, error = enviar("pago", {**pago, "importe": 1})
+        self.assertEqual(codigo, 400)
+        self.assertIn("cancelada", error["error"])
+        comprobante = enviar("comprobante", folio)[1]
+        self.assertEqual((comprobante["estado"], comprobante["pagado"], comprobante["saldo"]), ("cancelada", 0, 0))
+
     def test_recorrido(self):
         def ok(a,p,u="operador"):
             status,r,_=self.peticion(a,p,u);self.assertEqual(status,200,r);return r
