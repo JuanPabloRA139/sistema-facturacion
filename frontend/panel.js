@@ -67,3 +67,9 @@ function formulario(id,accion){
     },e.submitter);
   });
 }
+function confirmar(titulo,detalle,etiqueta){
+  const d=el('confirmacion');
+  el('pregunta').textContent=titulo;el('detalle-confirmacion').textContent=detalle;el('aceptar').textContent=etiqueta;
+  d.returnValue='volver';
+  return new Promise(resolve=>{d.addEventListener('close',()=>resolve(d.returnValue==='aceptar'),{once:true});d.showModal();});
+}
