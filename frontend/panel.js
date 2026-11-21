@@ -128,3 +128,33 @@ async function realizado(texto){
   catch {mensaje(texto+' No se pudo actualizar la vista. Vuelve a entrar para consultarla.',true);}
 }
 const llaveEnvio=()=> 'facturacion:emision:'+datos.usuario;
+async function entrar(){
+  await recargar(); el('acceso').hidden=true; el('trabajo').hidden=false; el('perfil').hidden=false;
+  el('estado').textContent='Sesión activa'; el('identidad').textContent=datos.rol[0].toUpperCase()+datos.rol.slice(1);
+  const admin=datos.rol==='administrador',auditor=datos.rol==='auditor';
+  const menu=el('menu');menu.replaceChildren();
+  for(const [id,etiqueta] of Object.entries(vistas)){
+    if((id==='catalogo'&&!admin)||(['clientes','emision'].includes(id)&&auditor)) continue;
+    const b=boton(etiqueta,()=>verVista(id));b.dataset.vista=id;menu.append(b);
+  }
+  el('sec-cobro').hidden=auditor;el('sec-cancelacion').hidden=!admin;el('sec-cerrar').hidden=!admin;el('eventos').hidden=datos.rol==='operador';
+  verVista(auditor?'historial':'emision');
+  clave=crypto.randomUUID();
+  if(!auditor){
+    let previo;
+    try {previo=sessionStorage.getItem(llaveEnvio());} catch {mensaje('Habilita el almacenamiento de la pestaña para emitir facturas.',true);}
+    if(previo){
+      const p=JSON.parse(previo);
+      if(Array.isArray(p.conceptos)&&typeof p.clave==='string'){
+        envio=p;conceptos=p.conceptos;clave=p.clave;el('cliente').value=String(p.cliente);
+        mensaje('Hay una emisión pendiente de verificar. Recupera el resultado con la misma referencia.');
+      }
+    }
+  }
+  actualizarResumen();
+}
+el('salir').onclick=()=>tarea(async()=>{
+  if(!await confirmar('¿Cerrar sesión?',conceptos.length&&!envio?'Se descartarán los conceptos del borrador.':'Para continuar tendrás que identificarte de nuevo.','Cerrar sesión')) return;
+  if(window.accesoAWS) return window.accesoAWS.salir();
+  await api('salir');mostrarAcceso();mensaje('Sesión cerrada.');
+});
