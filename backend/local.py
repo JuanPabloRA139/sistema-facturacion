@@ -120,3 +120,26 @@ class FacturacionSQLite:
         cid=self.db.execute("INSERT INTO clientes(nombre,rfc,usuario) VALUES(?,?,?)",(nombre,rfc,self.usuario)).lastrowid
         return cid
 
+    def registrar_pago(self, folio, ref, importe):
+        f=visible(self.db,self.usuario,folio)
+        previo=self.db.execute("SELECT importe FROM pagos WHERE factura=? AND referencia=?",(f["id"],ref)).fetchone()
+        if previo:
+            exigir(previo[0]==importe,"Referencia ya utilizada con otro importe.")
+        else:
+            exigir(f["estado"] != "cancelada", "La factura está cancelada y no admite pagos.")
+            saldo = f["total"] - pagado(self.db, f["id"])
+            exigir(importe <= saldo, "El pago supera el saldo pendiente de la factura.")
+            self.db.execute("INSERT INTO pagos(factura,referencia,importe) VALUES(?,?,?)",(f["id"],ref,importe))
+            estado="pagada" if pagado(self.db,f["id"])==f["total"] else "parcial"
+            self.db.execute("UPDATE facturas SET estado=? WHERE id=?",(estado,f["id"]))
+            evento(self.db,self.usuario,"pago",f["id"])
+        return previo is not None
+
+    def cancelar(self, folio, motivo):
+        f=visible(self.db,self.usuario,folio)
+        if f["estado"]!="cancelada":
+            exigir(pagado(self.db,f["id"])==0,"Solo se pueden cancelar facturas sin pagos registrados.")
+            self.db.execute("UPDATE facturas SET estado='cancelada' WHERE id=?",(f["id"],))
+            self.db.execute("INSERT INTO movimientos(fecha,factura,concepto,importe) VALUES(?,?,'reversion',?)",(str(date.today()),f["id"],-f["total"]))
+            evento(self.db,self.usuario,"cancelación",f["id"],motivo)
+
