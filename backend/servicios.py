@@ -64,3 +64,20 @@ def emitir(repo, datos):
     return factura
 
 
+def comprobante(repo, datos):
+    return repo.comprobante(entero(datos.get("factura")))
+
+
+def pago(repo, datos):
+    folio = entero(datos.get("factura"))
+    referencia = cadena(datos.get("referencia"), 64)
+    duplicado = repo.registrar_pago(folio, referencia, entero(datos.get("importe")))
+    return dict(repo.comprobante(folio), pago_duplicado=duplicado)
+
+
+def cancelar(repo, datos):
+    folio = entero(datos.get("factura"))
+    repo.cancelar(folio, cadena(datos.get("motivo"), 160))
+    return repo.comprobante(folio)
+
+
