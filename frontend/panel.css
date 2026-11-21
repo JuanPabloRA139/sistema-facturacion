@@ -94,3 +94,101 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
   color:#deebe3;
   text-align:left;
 }
+.rail nav button {
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:12px 14px;
+  font-size:14px;
+}
+.rail nav button:before {
+  content:"";
+  display:block;
+  width:15px;
+  height:18px;
+  flex:none;
+  border:1.5px solid currentColor;
+  border-radius:2px;
+  color:#c5d8cb;
+  background:linear-gradient(currentColor 0 0) 3px 5px/7px 1px no-repeat,linear-gradient(currentColor 0 0) 3px 9px/7px 1px no-repeat;
+}
+.rail nav button[data-vista=clientes]:before {
+  height:18px;
+  border:0;
+  background:radial-gradient(circle at 50% 25%,currentColor 3px,transparent 3.5px),radial-gradient(ellipse at 50% 100%,currentColor 6px,transparent 6.5px);
+}
+.rail nav button[data-vista=historial]:before {
+  box-shadow:-3px 3px 0 -1px var(--rail),-3px 3px 0 0 currentColor;
+}
+.rail nav button[data-vista=reportes]:before {
+  border:0;
+  border-bottom:1px solid;
+  background:linear-gradient(currentColor 0 0) 1px bottom/3px 7px no-repeat,linear-gradient(currentColor 0 0) 6px bottom/3px 11px no-repeat,linear-gradient(currentColor 0 0) 11px bottom/3px 16px no-repeat;
+}
+.rail nav button[aria-pressed=true] {
+  background:#2a594c;
+  color:white;
+  box-shadow:inset 3px 0 #c9d3a3;
+}
+.rail nav button:hover:enabled,.salir:hover:enabled {
+  background:#245044;
+}
+.rail footer {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin-top:auto;
+  border-top:1px solid #ffffff30;
+  padding-top:16px;
+}
+.avatar {
+  color:#d1dec6;
+}
+.salir {
+  margin-left:auto;
+  text-decoration:underline;
+}
+.area {
+  min-width:0;
+}
+.barra {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid var(--linea);
+  padding:17px clamp(20px,4vw,66px);
+  background:#fff;
+  font-size:13px;
+  color:var(--gris);
+}
+.barra strong {
+  color:var(--tinta);
+  font-weight:600;
+}
+.separador {
+  padding:0 8px;
+  color:#9ca99f;
+}
+.estado,.pill {
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+}
+.estado:before,.pill:before {
+  content:"";
+  width:7px;
+  height:7px;
+  background:#418267;
+  border-radius:50%;
+}
+.pill {
+  border:1px solid #dbddc9;
+  border-radius:99px;
+  padding:3px 10px;
+  font-size:12px;
+  background:#f6f5ea;
+  color:#615d39;
+}
+.pill:before {
+  background:#9a8850;
+}
