@@ -51,3 +51,19 @@ async function tarea(accion,control){
     if(datos) actualizarResumen();
   }
 }
+function formulario(id,accion){
+  el(id).addEventListener('submit',e=>{
+    e.preventDefault();
+    const campos=Object.fromEntries(new FormData(e.target));
+    tarea(()=>{
+      for(const nombre of ['nombre','rfc','referencia','motivo','periodo']){
+        if(!(nombre in campos))continue;
+        if(/[\p{Cc}\p{Cf}\p{Cs}]/u.test(campos[nombre])||!campos[nombre].trim()){
+          throw new Error('Revisa el campo '+nombre+'. Debe contener texto visible.');
+        }
+        campos[nombre]=campos[nombre].trim();
+      }
+      return accion(campos,e.target);
+    },e.submitter);
+  });
+}
