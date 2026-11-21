@@ -1,0 +1,55 @@
+:root {
+  color-scheme:light;
+  --tinta:#192f2b;
+  --verde:#155a49;
+  --rail:#103c35;
+  --linea:#d9dfd7;
+  --papel:#fbfaf6;
+  --gris:#546860;
+  font:15px/1.5 Inter,"Segoe UI",Arial,sans-serif;
+  color:var(--tinta);
+  background:var(--papel);
+}
+* {
+  box-sizing:border-box;
+}
+body {
+  margin:0;
+  display:grid;
+  grid-template-columns:234px minmax(0,1fr);
+  min-height:100vh;
+}
+[hidden] {
+  display:none!important;
+}
+button,input,select {
+  font:inherit;
+}
+button {
+  cursor:pointer;
+  border:1px solid #bbc9c0;
+  background:#fff;
+  color:var(--verde);
+  border-radius:6px;
+  padding:.57rem .95rem;
+  font-weight:600;
+}
+button:hover:enabled {
+  background:#edf3ed;
+}
+button:disabled {
+  opacity:.55;
+  cursor:default;
+}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible {
+  outline:3px solid #b88328;
+  outline-offset:3px;
+}
+.primario {
+  background:var(--verde);
+  border-color:var(--verde);
+  color:white;
+}
+.primario:hover:enabled {
+  background:#0f4539;
+}
