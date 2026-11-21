@@ -82,10 +82,19 @@ class FlujoHTTP(unittest.TestCase):
             return self.peticion(accion,p,"operador")[:2]
         nombre = "O'Connor & Hijos <Norte>"
         _,c=hacer("cliente",{"nombre":nombre,"rfc":"ZETA000229AB1"})
-        p={"cliente":c["cliente"],"clave":"confirmada","conceptos":[{"servicio":1,"cantidad":1}]}
-        self.assertIn(hacer("emitir",{**p,"total_esperado":11759})[0], (400,409))
+        contrato = Path(__file__).resolve().parents[1] / "docs" / "openapi.json"
+        emitir = json.loads(contrato.read_bytes())["paths"]["/api/emitir"]["post"]
+        ejemplos = emitir["requestBody"]["content"]["application/json"]["examples"]
+        p = {**ejemplos["importeConfirmado"]["value"], "cliente": c["cliente"]}
+        distinto = {**ejemplos["importeDistinto"]["value"], "cliente": c["cliente"]}
+        self.assertEqual(distinto["total_esperado"], p["total_esperado"] - 1)
+        codigo, error = hacer("emitir", distinto)
+        self.assertEqual(codigo, 409)
+        self.assertEqual(error, emitir["responses"]["409"]["content"]["application/json"]["example"])
         self.assertEqual(hacer("inicio",{})[1]["facturas"],[])
-        _,f=hacer("emitir",{**p,"total_esperado":11760})
+        codigo, f = hacer("emitir", p)
+        self.assertEqual(codigo, 200)
+        self.assertEqual(f["total"], p["total_esperado"])
         self.assertEqual(f["cliente_nombre"],nombre)
         self.assertEqual(hacer("emitir",{**p,"total_esperado":11760})[1]["id"],f["id"])
         self.assertEqual(hacer("emitir",{**p,"conceptos":[{"servicio":1,"cantidad":2}]})[0],400)
