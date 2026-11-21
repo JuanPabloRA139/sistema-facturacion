@@ -46,6 +46,18 @@ class FlujoHTTP(unittest.TestCase):
         c.request("POST","/api/"+accion,json.dumps(p),{"Origin":self.s.origen,"Content-Type":"application/json","Cookie":self.tokens.get(usuario,"")})
         r=c.getresponse(); data=json.loads(r.read()); cookie=r.getheader("Set-Cookie");c.close()
         return r.status,data,cookie
+    def test_alta_distingue_formato_y_fecha_del_rfc(self):
+        def clientes():
+            return self.peticion("inicio", {}, "operador")[1]["clientes"]
+
+        antes = clientes()
+        for rfc, motivo in (("ABC", "formato del RFC"), ("ZETA010229AB1", "fecha del RFC")):
+            with self.subTest(rfc=rfc):
+                codigo, cuerpo, _ = self.peticion("cliente", {"nombre": "Taller", "rfc": rfc}, "operador")
+                self.assertEqual(codigo, 400)
+                self.assertIn(motivo, cuerpo["error"])
+                self.assertEqual(clientes(), antes)
+
     def test_recorrido(self):
         def ok(a,p,u="operador"):
             status,r,_=self.peticion(a,p,u);self.assertEqual(status,200,r);return r
