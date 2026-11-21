@@ -192,3 +192,61 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .pill:before {
   background:#9a8850;
 }
+main {
+  max-width:1530px;
+  margin:auto;
+  padding:clamp(22px,3.8vw,60px);
+}
+h1,h2 {
+  font-family:Georgia,"Times New Roman",serif;
+  letter-spacing:-.035em;
+  font-weight:500;
+  line-height:1.15;
+  margin:0;
+}
+h1 {
+  font-size:clamp(32px,3.4vw,52px);
+  margin-bottom:26px;
+}
+h2 {
+  font-size:27px;
+  margin-bottom:22px;
+}
+h3 {
+  font-size:17px;
+  font-weight:650;
+  margin:0;
+}
+.mesa {
+  display:grid;
+  grid-template-columns:minmax(0,2.3fr) minmax(245px,1fr);
+  gap:22px;
+  align-items:start;
+}
+article,.resumen,#acceso {
+  background:white;
+  border:1px solid var(--linea);
+  border-radius:10px;
+  padding:clamp(19px,2.1vw,34px);
+  box-shadow:0 3px 12px #253d2f06;
+  min-width:0;
+}
+article+article,#salida {
+  margin-top:18px;
+}
+.documento {
+  border-top:3px solid #275749;
+}
+.cab,.pie,.acciones {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.cab h2 {
+  margin:0;
+  font-size:36px;
+}
+.cab {
+  margin-bottom:26px;
+}
