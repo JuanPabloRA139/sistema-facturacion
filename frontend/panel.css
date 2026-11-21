@@ -398,3 +398,114 @@ pre {
   background:#fff2e9;
   border-color:#a65531;
 }
+dialog {
+  color:var(--tinta);
+  border:1px solid var(--linea);
+  border-radius:12px;
+  padding:28px;
+  width:min(440px,92vw);
+}
+dialog::backdrop {
+  background:#09282082;
+}
+.acciones {
+  justify-content:flex-end;
+  margin-top:24px;
+}
+#alta+small {
+  display:block;
+  margin-top:14px;
+}
+@media(max-width:1100px) {
+  body {
+    grid-template-columns:192px minmax(0,1fr);
+  }
+  .rail {
+    padding-inline:12px;
+  }
+  main {
+    padding:24px;
+  }
+  .mesa {
+    gap:14px;
+    grid-template-columns:minmax(0,1.7fr) minmax(215px,1fr);
+  }
+}
+@media(max-width:850px) {
+  .mesa {
+    grid-template-columns:1fr;
+  }
+  .resumen {
+    max-width:none;
+  }
+  .rail nav button {
+    gap:8px;
+  }
+}
+@media(max-width:650px) {
+  body {
+    display:block;
+  }
+  .rail {
+    position:static;
+    height:auto;
+    padding:12px 16px;
+    display:grid;
+    grid-template-columns:1fr auto;
+  }
+  .marca {
+    padding:0;
+    border:0;
+    gap:8px;
+  }
+  .marca strong {
+    font-size:16px;
+  }
+  .sello {
+    font-size:22px;
+    padding:5px 8px;
+  }
+  .rail nav {
+    display:flex;
+    grid-column:1/-1;
+    grid-row:2;
+    overflow:auto;
+    margin:8px 0 0;
+  }
+  .rail nav:empty {
+    display:none;
+  }
+  .rail nav button {
+    white-space:nowrap;
+    padding:7px 9px;
+    font-size:12px;
+  }
+  .rail nav button:before {
+    display:none;
+  }
+  .rail footer {
+    grid-column:2;
+    grid-row:1;
+    border:0;
+    padding:0;
+    margin:0;
+  }
+  .barra {
+    padding:10px 16px;
+  }
+  .cab {
+    gap:4px;
+  }
+  .conceptos button {
+    font-size:13px;
+  }
+  main {
+    padding:20px 12px;
+  }
+  .detalle {
+    min-width:375px;
+  }
+  .total strong {
+    font-size:32px;
+  }
+}
