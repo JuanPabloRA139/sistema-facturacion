@@ -33,3 +33,34 @@ def lista_ids(valores, limite):
     return ids
 
 
+def inicio(repo, datos):
+    return repo.inicio()
+
+
+def cliente(repo, datos):
+    nombre = cadena(datos.get("nombre"), 100)
+    rfc = validar_rfc(cadena(datos.get("rfc"), 13))
+    return {"cliente": repo.crear_cliente(nombre, rfc)}
+
+
+def emitir(repo, datos):
+    clave = cadena(datos.get("clave"), 80)
+    cliente_id = entero(datos.get("cliente"))
+    lineas = datos.get("conceptos")
+    if not isinstance(lineas, list) or not 1 <= len(lineas) <= 30:
+        raise ValueError("Agrega de 1 a 30 conceptos.")
+    conceptos = []
+    for linea in lineas:
+        if not isinstance(linea, dict) or set(linea) != {"servicio", "cantidad"}:
+            raise ValueError("Concepto inválido.")
+        conceptos.append({"servicio": entero(linea.get("servicio")), "cantidad": entero(linea.get("cantidad"), 999)})
+    esperado = datos.get("total_esperado")
+    if "total_esperado" in datos and (type(esperado) is not int or not 0 <= esperado <= 10**13):
+        raise ValueError("Total esperado inválido.")
+    factura = repo.comprobante(repo.emitir(cliente_id, clave, conceptos))
+    if esperado is not None and factura["total"] != esperado:
+        # Ambos adaptadores conservan la transacción abierta hasta que termina este caso de uso.
+        raise TotalModificado("El total cambió. Revisa el resumen y confirma nuevamente.")
+    return factura
+
+
