@@ -39,3 +39,24 @@ test('El doble envío del formulario de acceso inicia una sola petición', async
   assert.equal(enviar.disabled,false);assert.equal(form.elements.clave.value,'');
 });
 
+test('Emitir requiere confirmación y recupera el mismo envío tras una interrupción',async()=>{
+  const {control,contexto,ejecutar,storage}=await panel();
+  const enviadas=[];let aceptar=false;
+  contexto.decidir=async()=>aceptar;
+  contexto.peticion=async(_,p)=>{
+    enviadas.push(JSON.stringify(p));
+    if(enviadas.length===1)throw new Error('Respuesta interrumpida');
+    return {id:42,total:11760};
+  };
+  ejecutar(`datos={usuario:'operador'};conceptos=[{servicio:1,cantidad:1}];clave=crypto.randomUUID();
+    actualizarResumen=()=>11760; confirmar=decidir;api=peticion;verFactura=()=>{};realizado=async texto=>mensaje(texto);`);
+  control('cliente').selectedOptions=[{textContent:'Empresa',value:'1'}];
+  const emitir=control('emitir').onclick;
+  await emitir();assert.equal(enviadas.length,0);
+  aceptar=true;await Promise.all([emitir(),emitir()]);assert.equal(enviadas.length,1);
+  assert.equal(storage.size,1);
+  await Promise.all([emitir(),emitir()]);assert.equal(enviadas.length,2);
+  assert.equal(enviadas[0],enviadas[1]);assert.equal(storage.size,0);
+  assert.match(control('mensaje').textContent,/Factura 42 emitida/);
+});
+
