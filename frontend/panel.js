@@ -91,3 +91,21 @@ function mostrar(titulo,contenido){
   el('salida').hidden=false; el('titulo').textContent=titulo; el('resultado').replaceChildren(contenido);
   el('salida').scrollIntoView({block:'nearest'});
 }
+function verFactura(f){
+  const detalle=document.createElement('div');
+  detalle.append(nodo('p',f.cliente_nombre+' · '+f.rfc+' · '+f.estado),tabla(f.conceptos));
+  for(const k of ['subtotal','descuento','iva','retencion','total','pagado','saldo']) detalle.append(nodo('p',k+' · '+moneda(f[k])));
+  const json=document.createElement('details');
+  json.append(nodo('summary','Ver comprobante en JSON'),nodo('pre',JSON.stringify(f,null,2)));
+  detalle.append(json); mostrar('Factura '+f.id+' · '+f.fecha,detalle);
+}
+function opciones(select,items,precios=false){
+  const anterior=new Set(Array.from(select.selectedOptions,o=>o.value));
+  select.replaceChildren(...items.map(i=>new Option(i.nombre+(precios?' · '+moneda(i.precio):''),i.id)));
+  if(select.id==='cliente'){
+    const vacio=new Option('Seleccionar cliente','');
+    select.add(vacio,0);
+    select.value='';
+  }
+  for(const o of select.options) if(anterior.has(o.value)) o.selected=true;
+}
