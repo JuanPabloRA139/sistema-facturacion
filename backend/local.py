@@ -30,3 +30,29 @@ def inicializar(db):
                    ("Cliente de muestra", "XAXX010101000", nombre))
     db.commit()
 
+def exigir(condicion, mensaje):
+    if not condicion:
+        raise ValueError(mensaje)
+
+def numero(valor, minimo=1, maximo=10**9):
+    exigir(type(valor) is int and minimo <= valor <= maximo, "Número fuera de rango.")
+    return valor
+
+def texto(valor, longitud):
+    exigir(isinstance(valor,str) and 0 < len(valor.strip()) <= longitud, "Texto vacío o demasiado largo.")
+    return valor.strip()
+
+def filas(db, sql, args=()):
+    return [dict(fila) for fila in db.execute(sql,args)]
+
+def evento(db,u,accion,entidad,detalle=""):
+    db.execute("INSERT INTO auditoria(usuario,accion,entidad,detalle) VALUES(?,?,?,?)",(u,accion,str(entidad),detalle))
+
+def visible(db, u, fid):
+    f = db.execute("SELECT * FROM facturas WHERE id=? AND (usuario=? OR ?)",(numero(fid),u,ROLES[u]!="operador")).fetchone()
+    exigir(f is not None,"Factura no disponible.")
+    return dict(f)
+
+def pagado(db,fid):
+    return db.execute("SELECT coalesce(sum(importe),0) FROM pagos WHERE factura=?",(fid,)).fetchone()[0]
+
