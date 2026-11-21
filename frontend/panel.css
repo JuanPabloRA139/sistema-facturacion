@@ -53,3 +53,44 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .primario:hover:enabled {
   background:#0f4539;
 }
+.rail {
+  position:sticky;
+  top:0;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  background:var(--rail);
+  color:#f5f4e9;
+  padding:34px 19px 20px;
+}
+.marca {
+  display:flex;
+  align-items:center;
+  gap:13px;
+  padding:0 6px 32px;
+  border-bottom:1px solid #ffffff30;
+}
+.marca strong {
+  font-family:Georgia,serif;
+  font-size:21px;
+  line-height:1.1;
+  font-weight:500;
+}
+.sello {
+  font:italic 35px/1 Georgia,serif;
+  color:#173f35;
+  background:#dfdec0;
+  border-radius:6px 13px 5px 5px;
+  padding:6px 12px;
+}
+.rail nav {
+  display:grid;
+  gap:6px;
+  margin-top:30px;
+}
+.rail nav button,.salir {
+  background:transparent;
+  border:none;
+  color:#deebe3;
+  text-align:left;
+}
