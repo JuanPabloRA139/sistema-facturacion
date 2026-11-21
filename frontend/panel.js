@@ -179,3 +179,29 @@ if(el('login'))formulario('login',async(p,form)=>{
   form.elements.clave.value='';
   await cargarSesion();
 });
+function reiniciar(){conceptos=[];envio=undefined;clave=crypto.randomUUID();el('agregar').hidden=true;}
+function actualizarResumen(){
+  const lista=el('lineas');lista.replaceChildren();
+  let subtotal=0, unidades=0;
+  for(const [i,l] of conceptos.entries()){
+    const s=datos.servicios.find(s=>s.id===l.servicio);
+    const importe=(s?.precio || 0)*l.cantidad;
+    subtotal+=importe;unidades+=l.cantidad;
+    const tr=lista.insertRow();
+    for(const valor of [s?.nombre || 'Servicio no disponible',l.cantidad,moneda(s?.precio || 0),moneda(importe)]) tr.insertCell().textContent=valor;
+    const quitar=boton('×',()=>{conceptos.splice(i,1);clave=crypto.randomUUID();});
+    quitar.className='quitar';quitar.setAttribute('aria-label','Quitar concepto '+(i+1));quitar.disabled=Boolean(envio);tr.insertCell().append(quitar);
+  }
+  if(!conceptos.length){const td=lista.insertRow().insertCell();td.colSpan=5;td.className='vacio';td.textContent='Agrega un servicio para calcular la factura.';}
+  const descuento=unidades>=10?Math.floor((subtotal*5+50)/100):0;
+  const impuesto=tasa=>Math.floor(((subtotal-descuento)*tasa+5000)/10000);
+  const iva=impuesto(datos.tasas.iva),retencion=impuesto(datos.tasas.retencion);
+  const total=subtotal-descuento+iva-retencion;
+  for(const [id,valor] of Object.entries({subtotal,descuento,iva,retencion,total})) el(id).textContent=moneda(['retencion','descuento'].includes(id)&&valor?-valor:valor);
+  el('et-iva').textContent='IVA ('+datos.tasas.iva/100+' %)';el('et-retencion').textContent='Retención ('+datos.tasas.retencion/100+' %)';
+  el('emitir').disabled=!envio&&(!conceptos.length||!el('cliente').value);
+  el('emitir').textContent=envio?'Verificar emisión':'Emitir factura';
+  el('vaciar').disabled=!conceptos.length;el('cliente').disabled=Boolean(envio);
+  el('abrir-concepto').disabled=Boolean(envio);if(envio)el('agregar').hidden=true;
+  return total;
+}
