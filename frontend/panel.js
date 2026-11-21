@@ -217,3 +217,82 @@ el('vaciar').onclick=()=>tarea(async()=>{
   sessionStorage.removeItem(llaveEnvio());reiniciar();mensaje('Borrador descartado.');
 });
 el('cliente').onchange=()=>{clave=crypto.randomUUID();actualizarResumen();};
+el('emitir').onclick=()=>tarea(async()=>{
+  const total=actualizarResumen();
+  if(!envio){
+    const cliente=el('cliente').selectedOptions[0];
+    if(!cliente?.value||!conceptos.length)return;
+    if(!await confirmar('¿Emitir esta factura?',cliente.textContent+' · '+conceptos.length+' concepto(s) · Total '+moneda(total)+' MXN.','Emitir factura'))return;
+    const solicitud={cliente:Number(cliente.value),clave,conceptos:[...conceptos],total_esperado:total};
+    try {sessionStorage.setItem(llaveEnvio(),JSON.stringify(solicitud));}
+    catch {throw new Error('Habilita el almacenamiento de la pestaña antes de emitir.');}
+    envio=solicitud;
+  }
+  el('emitir').disabled=true;el('emitir').textContent='Procesando emisión…';
+  let f;
+  try {f=await api('emitir',envio);}
+  catch(e){
+    if(datos&&[400,403,404,409,422].includes(e.estado)){
+      sessionStorage.removeItem(llaveEnvio());envio=undefined;clave=crypto.randomUUID();await recargar();
+    }
+    throw e;
+  }
+  sessionStorage.removeItem(llaveEnvio());reiniciar();verFactura(f);await realizado('Factura '+f.id+' emitida por '+moneda(f.total)+' MXN.');
+});
+formulario('alta',async(p,form)=>{
+  p.nombre=p.nombre.trim();p.rfc=p.rfc.trim().toUpperCase();
+  if(!p.nombre||!formatoRfcValido(p.rfc))throw new Error('Revisa el nombre, el RFC y su fecha.');
+  if(!await confirmar('¿Guardar cliente?',p.nombre+' · '+p.rfc,'Guardar cliente'))return;
+  const c=await api('cliente',p);form.reset();await realizado('Cliente guardado.');
+  if(datos&&!envio&&!conceptos.length)el('cliente').value=String(c.cliente);
+});
+function centavos(valor){
+  if(!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(valor))throw new Error('Usa un importe positivo con hasta dos decimales.');
+  const [entero,decimal='']=valor.split('.');return Number(entero)*100+Number(decimal.padEnd(2,'0'));
+}
+formulario('cobro',async(p,form)=>{
+  const importe=centavos(p.pesos);
+  if(!await confirmar('¿Registrar este pago?','Factura '+p.factura+' · '+moneda(importe)+' MXN · Referencia '+p.referencia,'Registrar pago'))return;
+  const {pago_duplicado,...f}=await api('pago',{factura:Number(p.factura),referencia:p.referencia,importe});
+  form.reset();verFactura(f);await realizado((pago_duplicado?'La referencia ya estaba registrada.':'Pago registrado.')+' Saldo pendiente '+moneda(f.saldo)+'.');
+});
+formulario('cancelacion',async(p,form)=>{
+  if(!await confirmar('¿Cancelar la factura '+p.factura+'?',p.motivo+' · Esta acción es definitiva.','Cancelar factura'))return;
+  verFactura(await api('cancelar',{factura:Number(p.factura),motivo:p.motivo}));form.reset();await realizado('Factura '+p.factura+' cancelada.');
+});
+formulario('tarifas',async(p,form)=>{
+  const precio=centavos(p.pesos);
+  if(!await confirmar('¿Cambiar la tarifa?',form.elements.servicio.selectedOptions[0].textContent+' → '+moneda(precio)+' MXN.','Guardar tarifa'))return;
+  await api('tarifa',{servicio:Number(p.servicio),precio});await realizado('Tarifa guardada.');
+});
+formulario('lote',async(_,form)=>{
+  const ids=nombre=>Array.from(form.elements[nombre].selectedOptions,o=>Number(o.value));
+  const servicios=ids('servicios'),caracteristicas=ids('caracteristicas');
+  if(!await confirmar('¿Asignar características?',caracteristicas.length+' característica(s) a '+servicios.length+' servicio(s).','Asignar'))return;
+  await api('asignar',{servicios,caracteristicas});mensaje('Asignaciones guardadas.');
+});
+formulario('cerrar',async p=>{
+  if(!/^\d{4}-\d{2}(?:-\d{2})?$/.test(p.periodo))throw new Error('Usa AAAA-MM o AAAA-MM-DD.');
+  if(!await confirmar('¿Generar el cierre?', 'Periodo '+p.periodo+'. Se conservará el importe de este cierre.','Generar cierre'))return;
+  mostrar('Cierre de periodo',tabla([await api('cierre',p)]));mensaje('Cierre de periodo disponible.');
+});
+el('antiguedad').onclick=()=>tarea(async()=>mostrar('Saldos y vencimientos',tabla(await api('saldos'))));
+el('eventos').onclick=()=>tarea(async()=>mostrar('Eventos recientes',tabla(await api('auditoria'))));
+tarea(async()=>{
+  if(window.accesoAWS && !(await window.accesoAWS.preparar()))return;
+  try {await cargarSesion();} catch(e){
+    if(window.accesoAWS&&el('retomar').hidden)window.accesoAWS.reintentar();
+    if(e.estado!==401)throw e;
+  }
+}).then(()=>{if(window.accesoAWS&&!datos&&el('retomar').hidden&&el('login-aws').disabled)window.accesoAWS.reintentar();});
+
+
+// Un historial restaurado debe volver a comprobar la sesión antes de mostrar datos.
+window.addEventListener('pagehide', e=>{
+  if(!e.persisted)return;
+  for(const id of ['trabajo','salida','menu','perfil'])el(id).hidden=true;
+  mensaje('');
+  const login=el('login');
+  if(login)login.elements.clave.value='';
+});
+window.addEventListener('pageshow', e=>{if(e.persisted)location.reload();});
