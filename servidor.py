@@ -104,3 +104,43 @@ class Peticion(BaseHTTPRequestHandler):
             return None, (200, {}, "application/json", "sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
         return sesion, None
 
+    def do_POST(self):
+        if not self.host_valido() or self.headers.get("Origin")!=self.server.origen:
+            return self.enviar(403,{"error":"Origen no autorizado."})
+        if self.headers.get_content_type()!="application/json":
+            return self.enviar(415,{"error":"Se requiere JSON."})
+        accion=self.path.removeprefix("/api/")
+        if self.path!="/api/"+accion: return self.enviar(404,{})
+        try:
+            n=int(self.headers.get("Content-Length","0"))
+            if not 0<n<=32768: return self.enviar(413,{"error":"Tamaño de petición inválido."})
+            p=leer_objeto(self.rfile.read(n))
+            with self.server.lock:
+                sesion, inmediata = self.autenticar(accion, p)
+            if inmediata:
+                return self.enviar(*inmediata)
+            with closing(conectar(self.server.ruta)) as db, db:
+                if accion not in LECTURAS: db.execute("BEGIN IMMEDIATE")
+                respuesta=operaciones(db,sesion[0],accion,p)
+            return self.enviar(200,respuesta)
+        except PermissionError:
+            return self.enviar(403,{"error":"Tu rol no permite esta operación."})
+        except TotalModificado as err:
+            return self.enviar(409, {"error": str(err)})
+        except sqlite3.IntegrityError:
+            return self.enviar(409,{"error":"El registro ya existe o contiene referencias inválidas."})
+        except (ValueError,TypeError,UnicodeError) as err:
+            return self.enviar(400,{"error":str(err) if type(err) is ValueError else "Formato inválido."})
+        except sqlite3.Error:
+            return self.enviar(503,{"error":"No se pudo completar la operación. Puedes reintentar."})
+
+if __name__=="__main__":
+    datos=ROOT/"datos-locales"
+    datos.mkdir(exist_ok=True)
+    with Servidor(datos/"facturacion.sqlite") as servidor:
+        print("Facturación local |",servidor.origen,flush=True)
+        for usuario in ROLES: print(usuario,servidor.clave(usuario),flush=True)
+        print("Claves temporales para esta sesión. Ctrl+C detiene el servidor.",flush=True)
+        if "--abrir" in sys.argv: webbrowser.open(servidor.origen)
+        try: servidor.serve_forever()
+        except KeyboardInterrupt: pass
