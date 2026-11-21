@@ -111,3 +111,37 @@ def cierre(repo, datos):
     return {"periodo": periodo, "neto": repo.cerrar(fecha, mensual)}
 
 
+def auditoria(repo, datos):
+    return repo.auditoria()
+
+
+TODOS = {"administrador", "operador", "auditor"}
+ESCRITURA = {"administrador", "operador"}
+ADMIN = {"administrador"}
+OPERACIONES = {
+    "inicio": (inicio, TODOS), "cliente": (cliente, ESCRITURA),
+    "emitir": (emitir, ESCRITURA), "comprobante": (comprobante, TODOS),
+    "pago": (pago, ESCRITURA), "cancelar": (cancelar, ADMIN),
+    "tarifa": (tarifa, ADMIN), "asignar": (asignar, ADMIN),
+    "saldos": (saldos, TODOS), "cierre": (cierre, ADMIN),
+    "auditoria": (auditoria, {"administrador", "auditor"}),
+}
+
+
+CAMPOS = {
+    "inicio": (), "cliente": ("nombre", "rfc"), "emitir": ("clave", "cliente", "conceptos", "total_esperado"),
+    "comprobante": ("factura",), "pago": ("factura", "referencia", "importe"),
+    "cancelar": ("factura", "motivo"), "tarifa": ("servicio", "precio"),
+    "asignar": ("servicios", "caracteristicas"), "saldos": (), "cierre": ("periodo",), "auditoria": (),
+}
+
+
+def ejecutar(repo, rol, accion, datos):
+    if accion not in OPERACIONES:
+        raise ValueError("Operación desconocida.")
+    operacion, permisos = OPERACIONES[accion]
+    if rol not in permisos:
+        raise PermissionError
+    if not isinstance(datos, dict) or datos.keys() - CAMPOS[accion]:
+        raise ValueError("La solicitud contiene campos no admitidos.")
+    return operacion(repo, datos)
