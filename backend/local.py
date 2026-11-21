@@ -56,3 +56,22 @@ def visible(db, u, fid):
 def pagado(db,fid):
     return db.execute("SELECT coalesce(sum(importe),0) FROM pagos WHERE factura=?",(fid,)).fetchone()[0]
 
+def comprobante(db,u,fid):
+    f = visible(db,u,fid)
+    f.pop("solicitud"); f.pop("clave")
+    f["conceptos"] = filas(db,"SELECT nombre,precio,cantidad FROM detalle_factura WHERE factura=?",(fid,))
+    f["cliente_nombre"], f["rfc"] = db.execute("SELECT nombre,rfc FROM clientes WHERE id=?",(f["cliente"],)).fetchone()
+    f["pagado"] = pagado(db,fid)
+    f["saldo"] = 0 if f["estado"]=="cancelada" else f["total"]-f["pagado"]
+    return f
+
+def descuento(subtotal,unidades):
+    return (subtotal*5+50)//100 if unidades>=10 else 0
+
+def calcular(db, subtotal, unidades, fecha):
+    iva,ret = db.execute("SELECT iva,retencion FROM impuestos_historico WHERE desde<=? ORDER BY desde DESC LIMIT 1",(fecha,)).fetchone()
+    desc = descuento(subtotal,unidades)
+    base = subtotal-desc
+    impuesto, retenido = ((base*t+5000)//10000 for t in (iva,ret))
+    return subtotal,desc,impuesto,retenido,base+impuesto-retenido
+
