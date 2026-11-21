@@ -205,3 +205,15 @@ function actualizarResumen(){
   el('abrir-concepto').disabled=Boolean(envio);if(envio)el('agregar').hidden=true;
   return total;
 }
+el('abrir-concepto').onclick=()=>{el('agregar').hidden=!el('agregar').hidden;if(!el('agregar').hidden)el('servicio').focus();};
+formulario('agregar',()=>{
+  if(envio||conceptos.length>=30)throw new Error('Revisa el borrador. El máximo es de 30 conceptos.');
+  const servicio=Number(el('servicio').value),cantidad=Number(el('cantidad').value);
+  if(!datos.servicios.some(s=>s.id===servicio)||!Number.isInteger(cantidad)||cantidad<1||cantidad>999)throw new Error('Selecciona un servicio y una cantidad de 1 a 999.');
+  conceptos.push({servicio,cantidad});clave=crypto.randomUUID();el('agregar').hidden=true;el('cantidad').value='1';mensaje('Concepto agregado.');
+});
+el('vaciar').onclick=()=>tarea(async()=>{
+  if(!await confirmar('¿Descartar el borrador?',envio?'Consulta las facturas recientes antes de volver a emitir. La operación anterior pudo completarse.':'Se quitarán todos los conceptos de esta factura.','Descartar'))return;
+  sessionStorage.removeItem(llaveEnvio());reiniciar();mensaje('Borrador descartado.');
+});
+el('cliente').onchange=()=>{clave=crypto.randomUUID();actualizarResumen();};
