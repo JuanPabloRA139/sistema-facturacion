@@ -98,3 +98,25 @@ def guardar_factura(db, u, cliente, clave, renglones):
     evento(db,u,"emisión",fid)
     return fid
 
+class FacturacionSQLite:
+    def __init__(self, db, usuario):
+        self.db = db
+        self.usuario = usuario
+
+    def emitir(self, cliente, clave, conceptos):
+        return guardar_factura(self.db, self.usuario, cliente, clave, conceptos)
+
+    def comprobante(self, folio):
+        return comprobante(self.db, self.usuario, folio)
+
+    def inicio(self):
+        tasas = self.db.execute("SELECT iva, retencion FROM impuestos_historico WHERE desde<=? ORDER BY desde DESC LIMIT 1", (date.today().isoformat(),)).fetchone()
+        return dict(tasas=dict(tasas),usuario=self.usuario,rol=ROLES[self.usuario],servicios=filas(self.db,"SELECT * FROM servicios ORDER BY id"),
+            clientes=filas(self.db,"SELECT id,nombre FROM clientes WHERE usuario=? OR ? ORDER BY id",(self.usuario,ROLES[self.usuario]!="operador")),
+            caracteristicas=filas(self.db,"SELECT * FROM caracteristicas ORDER BY id"),
+            facturas=filas(self.db,"SELECT id,fecha,total,estado FROM facturas WHERE usuario=? OR ? ORDER BY id DESC LIMIT 100",(self.usuario,ROLES[self.usuario]!="operador")))
+
+    def crear_cliente(self, nombre, rfc):
+        cid=self.db.execute("INSERT INTO clientes(nombre,rfc,usuario) VALUES(?,?,?)",(nombre,rfc,self.usuario)).lastrowid
+        return cid
+
