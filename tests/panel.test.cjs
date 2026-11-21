@@ -60,3 +60,11 @@ test('Emitir requiere confirmación y recupera el mismo envío tras una interrup
   assert.match(control('mensaje').textContent,/Factura 42 emitida/);
 });
 
+test('Los importes monetarios se convierten exactamente a centavos',async()=>{
+  const {ejecutar}=await panel();
+  assert.equal(ejecutar("centavos('1.01')"),101);
+  assert.equal(ejecutar("centavos('10.5')"),1050);
+  for(const s of ['1.005','1e3','-1',''])assert.throws(()=>ejecutar('centavos('+JSON.stringify(s)+')'));
+});
+
+
