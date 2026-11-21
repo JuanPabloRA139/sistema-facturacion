@@ -75,3 +75,26 @@ def calcular(db, subtotal, unidades, fecha):
     impuesto, retenido = ((base*t+5000)//10000 for t in (iva,ret))
     return subtotal,desc,impuesto,retenido,base+impuesto-retenido
 
+def guardar_factura(db, u, cliente, clave, renglones):
+    solicitud = json.dumps([cliente,renglones],sort_keys=True)
+    anterior = db.execute("SELECT id,solicitud FROM facturas WHERE usuario=? AND clave=?",(u,clave)).fetchone()
+    if anterior:
+        exigir(anterior["solicitud"]==solicitud,"La clave corresponde a otra emisión.")
+        return anterior["id"]
+    exigir(db.execute("SELECT 1 FROM clientes WHERE id=? AND (usuario=? OR ?)",(cliente,u,ROLES[u]=="administrador")).fetchone(),"Cliente no disponible.")
+    conceptos = []
+    for linea in renglones:
+        exigir(isinstance(linea,dict),"Concepto inválido.")
+        sid = numero(linea.get("servicio"))
+        s = db.execute("SELECT nombre,precio FROM servicios WHERE id=?",(sid,)).fetchone()
+        exigir(s,"Servicio desconocido.")
+        conceptos.append((sid,s["nombre"],s["precio"],numero(linea.get("cantidad"),1,999)))
+    hoy = date.today()
+    totales = calcular(db,sum(c[2]*c[3] for c in conceptos),sum(c[3] for c in conceptos),hoy.isoformat())
+    fid = db.execute("INSERT INTO facturas(cliente,usuario,clave,solicitud,fecha,vence,subtotal,descuento,iva,retencion,total) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (cliente,u,clave,solicitud,str(hoy),str(hoy+timedelta(days=30)),*totales)).lastrowid
+    db.executemany("INSERT INTO detalle_factura VALUES(?,?,?,?,?)",[(fid,*c) for c in conceptos])
+    db.execute("INSERT INTO movimientos(fecha,factura,concepto,importe) VALUES(?,?,'emision',?)",(str(hoy),fid,totales[-1]))
+    evento(db,u,"emisión",fid)
+    return fid
+
