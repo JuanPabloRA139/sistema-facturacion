@@ -143,3 +143,32 @@ class FacturacionSQLite:
             self.db.execute("INSERT INTO movimientos(fecha,factura,concepto,importe) VALUES(?,?,'reversion',?)",(str(date.today()),f["id"],-f["total"]))
             evento(self.db,self.usuario,"cancelación",f["id"],motivo)
 
+    def cambiar_tarifa(self, sid, precio):
+        antes=self.db.execute("SELECT precio FROM servicios WHERE id=?",(sid,)).fetchone()
+        exigir(antes,"Servicio desconocido.")
+        if antes[0] == precio:
+            return
+        self.db.execute("UPDATE servicios SET precio=? WHERE id=?",(precio,sid))
+        evento(self.db,self.usuario,"tarifa",sid,f"{antes[0]} → {precio} centavos")
+
+    def asignar(self, servicios, caracteristicas):
+        self.db.executemany("INSERT OR IGNORE INTO caracteristicas_servicio VALUES(?,?)",[(numero(s),numero(c)) for s in servicios for c in caracteristicas])
+
+    def saldos(self):
+        return filas(self.db,"""SELECT f.id AS folio,f.vence,max(0,CAST(julianday(?) - julianday(f.vence) AS INTEGER)) AS dias_vencidos,
+           f.total-coalesce(sum(p.importe),0) AS saldo FROM facturas f LEFT JOIN pagos p ON p.factura=f.id
+           WHERE f.estado IN ('emitida','parcial') AND (f.usuario=? OR ?) GROUP BY f.id ORDER BY f.vence LIMIT 200""",(str(date.today()),self.usuario,ROLES[self.usuario]!="operador"))
+
+    def cerrar(self, inicio, mensual):
+        fin=inicio+timedelta(days=1) if not mensual else (inicio.replace(day=28)+timedelta(days=4)).replace(day=1)
+        exigir(fin<=date.today(),"El periodo debe haber terminado.")
+        periodo = inicio.isoformat()[:7] if mensual else inicio.isoformat()
+        self.db.execute("""INSERT OR IGNORE INTO cierres(periodo,neto) SELECT ?,coalesce(sum(importe),0) FROM movimientos WHERE fecha>=? AND fecha<?""",(periodo,str(inicio),str(fin)))
+        return self.db.execute("SELECT neto FROM cierres WHERE periodo=?",(periodo,)).fetchone()[0]
+
+    def auditoria(self):
+        return filas(self.db,"SELECT * FROM auditoria ORDER BY id DESC LIMIT 100")
+
+
+def operaciones(db, usuario, accion, datos):
+    return ejecutar(FacturacionSQLite(db, usuario), ROLES[usuario], accion, datos)
