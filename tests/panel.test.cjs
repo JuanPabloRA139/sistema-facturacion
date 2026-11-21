@@ -25,3 +25,17 @@ async function panel(){
   return {control,contexto,ejecutar,storage};
 }
 
+test('El doble envío del formulario de acceso inicia una sola petición', async()=>{
+  const {control,contexto,ejecutar}=await panel();
+  let llamadas=0, resolver;
+  contexto.peticion=()=>{llamadas++;return new Promise(r=>{resolver=r;});};
+  ejecutar("api=peticion; entrar=async()=>{};");
+  const form=control('login'), enviar=control('boton-entrar');
+  form.campos=[['usuario','operador'],['clave','temporal']];form.elements={clave:{value:'temporal'}};
+  const evento={target:form,submitter:enviar,preventDefault(){}};
+  form.submit(evento);form.submit(evento);
+  assert.equal(llamadas,1);assert.equal(enviar.disabled,true);
+  resolver();await new Promise(setImmediate);
+  assert.equal(enviar.disabled,false);assert.equal(form.elements.clave.value,'');
+});
+
