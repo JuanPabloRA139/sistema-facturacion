@@ -81,3 +81,33 @@ def cancelar(repo, datos):
     return repo.comprobante(folio)
 
 
+def tarifa(repo, datos):
+    servicio = entero(datos.get("servicio"))
+    precio = entero(datos.get("precio"), 10000000)
+    repo.cambiar_tarifa(servicio, precio)
+    return {"servicio": servicio, "precio": precio}
+
+
+def asignar(repo, datos):
+    servicios = lista_ids(datos.get("servicios"), 100)
+    caracteristicas = lista_ids(datos.get("caracteristicas"), 50)
+    repo.asignar(servicios, caracteristicas)
+    return {"asignaciones_solicitadas": len(servicios) * len(caracteristicas)}
+
+
+def saldos(repo, datos):
+    return repo.saldos()
+
+
+def cierre(repo, datos):
+    periodo = cadena(datos.get("periodo"), 10)
+    if not re.fullmatch(r"\d{4}-\d{2}(-\d{2})?", periodo):
+        raise ValueError("Usa AAAA-MM o AAAA-MM-DD.")
+    mensual = len(periodo) == 7
+    fecha = date.fromisoformat(periodo + "-01" if mensual else periodo)
+    hoy = date.today()
+    if fecha >= hoy or (mensual and fecha.replace(day=1) >= hoy.replace(day=1)):
+        raise ValueError("El periodo debe haber terminado.")
+    return {"periodo": periodo, "neto": repo.cerrar(fecha, mensual)}
+
+
