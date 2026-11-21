@@ -69,3 +69,38 @@ class Peticion(BaseHTTPRequestHandler):
         tipos={".html":"text/html",".js":"text/javascript",".css":"text/css"}
         self.enviar(200,archivo.read_bytes(),tipos[archivo.suffix]+"; charset=utf-8")
 
+    def autenticar(self, accion, datos):
+        """Bajo el candado de sesiones. La escritura HTTP ocurre después de liberarlo."""
+        ahora = time.monotonic()
+        sesiones = self.server.sesiones
+        for sid, (_, vence) in list(sesiones.items()):
+            if vence <= ahora:
+                sesiones.pop(sid, None)
+        cookies = dict(parte.strip().split("=", 1) for parte in self.headers.get("Cookie", "").split(";") if "=" in parte)
+        token = cookies.get("sid")
+        if accion == "entrar":
+            if set(datos) != {"usuario", "clave"}:
+                return None, (400, {"error": "Campos no admitidos."})
+            self.server.fallos = [t for t in self.server.fallos if t > ahora-60]
+            if len(self.server.fallos) >= 10:
+                return None, (429, {"error": "Espera un minuto."})
+            usuario, clave = datos["usuario"], datos["clave"]
+            valido = isinstance(usuario, str) and isinstance(clave, str) and 0 < len(clave) <= 160
+            if not valido or not hmac.compare_digest(hashlib.sha256(clave.encode()).digest(), self.server.credenciales.get(usuario, b"")):
+                self.server.fallos.append(ahora)
+                return None, (401, {"error": "Credenciales incorrectas."})
+            sesiones.pop(token, None)
+            token = secrets.token_urlsafe(32)
+            sesiones[token] = (usuario, ahora+3600)
+            cookie = f"sid={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600"
+            return None, (200, {"usuario": usuario}, "application/json", cookie)
+        sesion = sesiones.get(token)
+        if sesion is None:
+            return None, (401, {"error": "Inicia sesión."})
+        if accion == "salir":
+            if datos:
+                return None, (400, {"error": "Campos no admitidos."})
+            sesiones.pop(token, None)
+            return None, (200, {}, "application/json", "sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0")
+        return sesion, None
+
