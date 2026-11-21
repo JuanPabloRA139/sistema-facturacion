@@ -24,3 +24,15 @@ async function api(accion, objeto={}) {
   }
   return cuerpo;
 }
+function mostrarAcceso(){
+  window.accesoAWS?.reintentar();
+  datos=undefined; conceptos=[]; envio=undefined; clave=undefined; el('retomar').hidden=true;
+  for(const id of ['trabajo','perfil','salida']) el(id).hidden=true;
+  el('acceso').hidden=false; el('ruta').textContent='Acceso'; el('estado').textContent='Acceso seguro';
+  for(const id of ['menu','resultado','lineas','facturas','cliente','servicio','identidad']) el(id).replaceChildren();
+  document.querySelectorAll('#trabajo form, #login').forEach(form=>form.reset());
+}
+function nodo(tipo,texto){const n=document.createElement(tipo); n.textContent=texto; return n;}
+function boton(texto,accion){
+  const b=nodo('button',texto); b.type='button'; b.onclick=()=>tarea(accion,b); return b;
+}
