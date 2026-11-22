@@ -46,7 +46,7 @@
 <h2>Alta de cliente</h2>
 <form id="alta">
 <label>Nombre o razón social<input name="nombre" maxlength="100" required></label>
-<label>RFC<input name="rfc" maxlength="13" required autocapitalize="characters"></label><button class="primario">Guardar cliente</button></form><small>Se valida la estructura del RFC y su fecha.</small></article></section>
+<label>RFC<input name="rfc" aria-describedby="ayuda-rfc" spellcheck="false" maxlength="13" required autocapitalize="characters"></label><button class="primario">Guardar cliente</button></form><small id="ayuda-rfc">Se valida la estructura del RFC y su fecha.</small></article></section>
 <section id="historial" hidden>
 <h1>Facturas y pagos</h1>
 <article>
