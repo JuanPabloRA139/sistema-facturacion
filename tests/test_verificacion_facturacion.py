@@ -91,3 +91,12 @@ class VerificacionFacturacion(unittest.TestCase):
         self.assertTrue(repetido["pago_duplicado"])
         self.assertEqual((repetido["pagado"], repetido["saldo"]), (11760, 0))
         self.assertNotIn(self.folio, [f["folio"] for f in self.operar("saldos")])
+
+    def test_segundo_operador_no_consulta_ni_cobra_el_folio(self):
+        resumen = self.operar("inicio", "operador2")
+        self.assertNotIn(self.folio, [f["id"] for f in resumen["facturas"]])
+        with self.assertRaises(ValueError):
+            self.operar("comprobante", "operador2", factura=self.folio)
+        with self.assertRaises(ValueError):
+            self.pagar(5000, usuario="operador2")
+        self.assertEqual(self.operar("comprobante", factura=self.folio)["saldo"], 11760)
