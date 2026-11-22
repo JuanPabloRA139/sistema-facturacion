@@ -4,7 +4,7 @@
 <aside class="rail">
 <div class="marca"><span class="sello" aria-hidden="true">F</span><strong>Facturación<br>y servicios</strong></div>
 <nav id="menu" aria-label="Navegación principal"></nav>
-<footer id="perfil" hidden><span class="avatar" aria-hidden="true">◉</span><strong id="identidad"></strong><button id="salir" class="salir">Salir</button></footer></aside>
+<footer id="perfil" hidden><span class="avatar" aria-hidden="true">◉</span><strong id="identidad"></strong><button id="salir" class="salir">Cerrar sesión</button></footer></aside>
 <div class="area">
 <header class="barra"><span>Facturación <span class="separador">/</span> <strong id="ruta">Acceso</strong></span><span class="estado" id="estado">Acceso seguro</span></header>
 <main><p id="mensaje" role="status" aria-live="polite"></p>
@@ -46,7 +46,7 @@
 <h2>Alta de cliente</h2>
 <form id="alta">
 <label>Nombre o razón social<input name="nombre" maxlength="100" required></label>
-<label>RFC<input name="rfc" maxlength="13" required autocapitalize="characters"></label><button class="primario">Guardar cliente</button></form><small>Se valida la estructura del RFC y su fecha.</small></article></section>
+<label>RFC<input name="rfc" aria-describedby="ayuda-rfc" spellcheck="false" maxlength="13" required autocapitalize="characters"></label><button class="primario">Guardar cliente</button></form><small id="ayuda-rfc">Se valida la estructura del RFC y su fecha.</small></article></section>
 <section id="historial" hidden>
 <h1>Facturas y pagos</h1>
 <article>
@@ -55,13 +55,13 @@
 <article id="sec-cobro">
 <h2>Registrar pago</h2>
 <form id="cobro">
-<label>Folio<input name="factura" type="number" min="1" max="1000000000" required></label>
-<label>Importe en MXN<input name="pesos" type="number" min=".01" max="10000000" step=".01" required></label>
+<label>Folio de la factura a pagar<input name="factura" type="number" min="1" max="1000000000" required></label>
+<label>Importe en MXN<input name="pesos" type="number" inputmode="decimal" min=".01" max="10000000" step=".01" required></label>
 <label>Referencia<input name="referencia" maxlength="64" required></label><button class="primario">Registrar pago</button></form></article>
 <article id="sec-cancelacion">
 <h2>Cancelar factura</h2>
 <form id="cancelacion">
-<label>Folio<input name="factura" type="number" min="1" max="1000000000" required></label>
+<label>Folio de la factura a cancelar<input name="factura" type="number" min="1" max="1000000000" required></label>
 <label>Motivo<input name="motivo" maxlength="160" required></label><button>Cancelar factura</button></form></article></section>
 <section id="reportes" hidden>
 <h1>Reportes</h1>
@@ -77,7 +77,7 @@
 <h2>Modificar tarifa</h2>
 <form id="tarifas">
 <label>Servicio<select name="servicio" required></select></label>
-<label>Nueva tarifa en MXN<input name="pesos" type="number" min=".01" max="100000" step=".01" required></label><button>Guardar tarifa</button></form></article>
+<label>Nueva tarifa en MXN<input name="pesos" type="number" inputmode="decimal" min=".01" max="100000" step=".01" required></label><button>Guardar tarifa</button></form></article>
 <article>
 <h2>Asignar características</h2>
 <form id="lote">
