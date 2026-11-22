@@ -47,3 +47,11 @@ class VerificacionFacturacion(unittest.TestCase):
         nueva = self.operar("emitir", **{**self.solicitud, "clave": "nueva-tarifa"})
         self.assertEqual((repetida["id"], repetida["total"]), (self.folio, 11760))
         self.assertEqual(nueva["total"], 22400)
+
+    def test_pago_parcial_coincide_con_cartera(self):
+        self.pagar(5000)
+        recibo = self.operar("comprobante", factura=self.folio)
+        cartera = {f["folio"]: f["saldo"] for f in self.operar("saldos")}
+        self.assertEqual((recibo["estado"], recibo["pagado"], recibo["saldo"]),
+                         ("parcial", 5000, 6760))
+        self.assertEqual(cartera[self.folio], recibo["saldo"])
