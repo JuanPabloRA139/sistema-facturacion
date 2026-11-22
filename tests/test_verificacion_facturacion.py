@@ -71,3 +71,15 @@ class VerificacionFacturacion(unittest.TestCase):
             (str(self.folio),)
         ).fetchone()[0]
         self.assertEqual(eventos, 1)
+
+    def test_referencia_con_otro_importe_conserva_el_pago_original(self):
+        self.pagar(5000)
+        with self.assertRaises(ValueError):
+            self.pagar(5001)
+        recibo = self.operar("comprobante", factura=self.folio)
+        self.assertEqual((recibo["pagado"], recibo["saldo"]), (5000, 6760))
+        fila = self.db.execute(
+            "SELECT importe FROM pagos WHERE factura = ? AND referencia = ?",
+            (self.folio, "PAGO-01")
+        ).fetchone()
+        self.assertEqual(fila[0], 5000)
