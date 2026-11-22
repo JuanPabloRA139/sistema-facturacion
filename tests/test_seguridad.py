@@ -32,3 +32,54 @@ class SeguridadTest(unittest.TestCase):
                 ejecutar(repo, "administrador", accion, campos)
             self.assertFalse(repo.mock_calls)
 
+    @patch.dict(os.environ, {"LOGIN_DOMAIN":"https://login.example", "CLIENT_ID":"cliente"})
+    def test_web_aws_acceso_y_archivos(self):
+        pagina = web({"rawPath":"/"}, None)
+        self.assertIn('id="confirmacion"', pagina["body"])
+        self.assertIn('id="login-aws"', pagina["body"])
+        self.assertNotIn('id="login"', pagina["body"])
+        self.assertNotIn("demo", pagina["body"].lower())
+        self.assertIn("frame-ancestors 'none'", pagina["headers"]["Content-Security-Policy"])
+        self.assertNotIn("unsafe-inline", pagina["headers"]["Content-Security-Policy"])
+        self.assertEqual(web({"rawPath":"/backend/servicios.py"}, None)["statusCode"],404)
+        for ruta in ("panel.js","panel.css","rfc.js","acceso-aws.js","config-publica"):
+            self.assertEqual(web({"rawPath":"/"+ruta}, None)["statusCode"],200)
+
+    @patch("backend.api_aws.conectar")
+    def test_api_rechaza_antes_de_abrir_bd(self, conectar):
+        evento = {"requestContext":{"authorizer":{"jwt":{"claims":{"sub":"usuario","token_use":"access"}}},
+                                    "http":{"method":"POST"}}, "headers":{"Content-Type":"application/json"}}
+        for cambios,codigo in (({"requestContext":{}},401),({"headers":{}},415),({"body":"[]"},400),
+                               ({"body":"a"*45001},413),({"body":"{}","isBase64Encoded":True},400)):
+            self.assertEqual(api({**evento,**cambios},None)["statusCode"],codigo)
+        conectar.assert_not_called()
+
+
+    @patch.dict(os.environ, {"LOGIN_DOMAIN":"https://login.example", "CLIENT_ID":"cliente"})
+    def test_plantillas_y_puntos_de_salida_del_panel(self):
+        class Inventario(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.ids = []
+                self.eventos = []
+            def handle_starttag(self, tag, attrs):
+                for k, v in attrs:
+                    if k == "id":
+                        self.ids.append(v)
+                    if k.startswith("on"):
+                        self.eventos.append(k)
+
+        frontend = Path(__file__).resolve().parents[1] / "frontend"
+        fuente = (frontend / "panel.js").read_text(encoding="utf-8")
+        for pagina, opcional in (((frontend/"panel.html").read_text(encoding="utf-8"), "login-aws"),
+                                 (web({"rawPath":"/"}, None)["body"], "login")):
+            inventario = Inventario()
+            inventario.feed(pagina)
+            self.assertFalse(inventario.eventos)
+            self.assertEqual(len(inventario.ids), len(set(inventario.ids)))
+            referencias = set(re.findall(r"\bel\('([^']+)'\)", fuente))
+            self.assertFalse(referencias - set(inventario.ids) - {opcional})
+        for js in frontend.glob("*.js"):
+            texto = js.read_text(encoding="utf-8")
+            for salida in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write(", "eval(", "new Function("):
+                self.assertNotIn(salida, texto)
