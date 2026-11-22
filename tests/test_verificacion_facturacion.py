@@ -83,3 +83,11 @@ class VerificacionFacturacion(unittest.TestCase):
             (self.folio, "PAGO-01")
         ).fetchone()
         self.assertEqual(fila[0], 5000)
+
+    def test_liquidar_y_reintentar_el_ultimo_centavo(self):
+        self.pagar(11759, "ANTICIPO")
+        self.assertEqual(self.pagar(1, "FINAL")["estado"], "pagada")
+        repetido = self.pagar(1, "FINAL")
+        self.assertTrue(repetido["pago_duplicado"])
+        self.assertEqual((repetido["pagado"], repetido["saldo"]), (11760, 0))
+        self.assertNotIn(self.folio, [f["folio"] for f in self.operar("saldos")])
