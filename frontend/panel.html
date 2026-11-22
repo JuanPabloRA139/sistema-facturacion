@@ -55,13 +55,13 @@
 <article id="sec-cobro">
 <h2>Registrar pago</h2>
 <form id="cobro">
-<label>Folio<input name="factura" type="number" min="1" max="1000000000" required></label>
+<label>Folio de la factura a pagar<input name="factura" type="number" min="1" max="1000000000" required></label>
 <label>Importe en MXN<input name="pesos" type="number" inputmode="decimal" min=".01" max="10000000" step=".01" required></label>
 <label>Referencia<input name="referencia" maxlength="64" required></label><button class="primario">Registrar pago</button></form></article>
 <article id="sec-cancelacion">
 <h2>Cancelar factura</h2>
 <form id="cancelacion">
-<label>Folio<input name="factura" type="number" min="1" max="1000000000" required></label>
+<label>Folio de la factura a cancelar<input name="factura" type="number" min="1" max="1000000000" required></label>
 <label>Motivo<input name="motivo" maxlength="160" required></label><button>Cancelar factura</button></form></article></section>
 <section id="reportes" hidden>
 <h1>Reportes</h1>
