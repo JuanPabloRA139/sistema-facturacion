@@ -107,3 +107,14 @@ class VerificacionFacturacion(unittest.TestCase):
             self.pagar(100, "INTENTO", "auditor")
         lectura = self.operar("comprobante", "auditor", factura=self.folio)
         self.assertEqual((lectura["pagado"], lectura["saldo"]), (5000, 6760))
+
+    def test_cancelacion_repetida_compensa_solo_una_emision(self):
+        for _ in range(2):
+            recibo = self.operar("cancelar", "admin", factura=self.folio, motivo="Prueba")
+            self.assertEqual((recibo["estado"], recibo["saldo"]), ("cancelada", 0))
+        movimientos = self.db.execute(
+            "SELECT concepto, importe FROM movimientos WHERE factura = ? ORDER BY id",
+            (self.folio,)
+        ).fetchall()
+        self.assertEqual([tuple(fila) for fila in movimientos],
+                         [("emision", 11760), ("reversion", -11760)])
