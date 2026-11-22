@@ -100,3 +100,10 @@ class VerificacionFacturacion(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.pagar(5000, usuario="operador2")
         self.assertEqual(self.operar("comprobante", factura=self.folio)["saldo"], 11760)
+
+    def test_auditor_consulta_el_saldo_pero_no_lo_modifica(self):
+        self.pagar(5000)
+        with self.assertRaises(PermissionError):
+            self.pagar(100, "INTENTO", "auditor")
+        lectura = self.operar("comprobante", "auditor", factura=self.folio)
+        self.assertEqual((lectura["pagado"], lectura["saldo"]), (5000, 6760))
