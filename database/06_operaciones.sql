@@ -21,4 +21,32 @@ CREATE INDEX IF NOT EXISTS facturas_usuario_folio ON facturas(usuario_id,folio);
 CREATE INDEX IF NOT EXISTS facturas_fecha ON facturas(fecha);
 CREATE INDEX IF NOT EXISTS reversiones_fecha ON reversiones(fecha);
 
+CREATE OR REPLACE PROCEDURE registrar_pago(
+    IN actor text, IN p_folio bigint, IN p_referencia text, IN p_importe numeric,
+    INOUT repetido boolean, INOUT saldo numeric)
+LANGUAGE plpgsql AS $$
+DECLARE
+    f facturas%ROWTYPE;
+    previo numeric;
+BEGIN
+    IF p_importe IS NULL OR NOT (p_importe>0 AND p_importe<100000000000000 AND p_importe=round(p_importe,2))
+       OR coalesce(length(trim(p_referencia)),0) NOT BETWEEN 1 AND 64 THEN
+        RAISE EXCEPTION 'Importe o referencia inválidos';
+    END IF;
+    SELECT fac.* INTO STRICT f FROM facturas fac JOIN usuarios_roles u ON u.usuario_id=actor
+      WHERE fac.folio=p_folio AND (u.rol='administrador' OR (u.rol='operador' AND fac.usuario_id=actor))
+      FOR UPDATE OF fac;
+    SELECT f.total-coalesce(sum(p.importe),0) INTO saldo FROM pagos p WHERE p.folio=p_folio;
+    SELECT p.importe INTO previo FROM pagos p WHERE p.folio=p_folio AND p.referencia=trim(p_referencia);
+    repetido := FOUND;
+    IF repetido THEN
+        IF previo<>p_importe THEN RAISE EXCEPTION 'Referencia utilizada con otro importe'; END IF;
+        RETURN;
+    END IF;
+    IF f.estado='cancelada' OR p_importe>saldo THEN RAISE EXCEPTION 'Pago incompatible con el saldo'; END IF;
+    INSERT INTO pagos(folio,referencia,importe) VALUES (p_folio,trim(p_referencia),p_importe);
+    saldo := saldo-p_importe;
+    UPDATE facturas SET estado=CASE WHEN saldo=0 THEN 'pagada' ELSE 'parcial' END WHERE folio=p_folio;
+END; $$;
+
 COMMIT;
