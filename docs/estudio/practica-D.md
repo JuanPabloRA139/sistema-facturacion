@@ -1,0 +1,2 @@
+# Primera práctica · AWS
+Desde PowerShell, ejecutar ./infra/revisar-auditoria.ps1. La definición JSON es el esquema previsto de DynamoDB. Una factura tendrá una clave entidad como FACTURA#123 y una clave evento que combina instante UTC e identificador único. Explicar cómo leer su historial por entidad. Como primer cambio, documentar un ejemplo de evento ficticio sin datos personales y el resultado del chequeo. El script verifica el archivo local. El despliegue y los permisos se probarán en el lab.
