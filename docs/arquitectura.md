@@ -19,3 +19,23 @@ flowchart TD
 ```
 La Lambda de operaciones comprueba el rol y la propiedad de cada registro. El navegador envía cantidades y claves de reintento. RDS fija importes y restricciones. El archivo de inicio y los recursos estáticos son públicos. Todas las operaciones con datos exigen un token de acceso. La red tiene dos subredes privadas, un endpoint de interfaz para secretos y uno de gateway para DynamoDB.
 
+## Recorrido de un pago
+La API obtiene el identificador validado por Cognito. Toma un bloqueo compartido por usuario en facturación y lee el rol desde la segunda RDS con una cuenta de solo lectura. Verifica que coincide con la copia operativa en facturación, que conserva las claves foráneas y las comprobaciones SQL. Si el directorio falla, la operación se interrumpe. servicios.pago valida los centavos y la referencia. FacturacionPostgres.registrar_pago llama al procedimiento que controla saldo y duplicados en una transacción. El alta de roles usa un bloqueo exclusivo sobre el mismo usuario. Si falla entre los dos commits, repetir el alta reconcilia el rol.
+
+## Modelo relacional
+```mermaid
+erDiagram
+    USUARIOS_ROLES ||--o{ CLIENTES : administra
+    USUARIOS_ROLES ||--o{ FACTURAS : emite
+    CLIENTES ||--o{ FACTURAS : recibe
+    FACTURAS ||--|{ DETALLE_FACTURA : contiene
+    SERVICIOS ||--o{ DETALLE_FACTURA : identifica
+    FACTURAS ||--o{ PAGOS : recibe
+    FACTURAS ||--o| REVERSIONES : revierte
+    SERVICIOS ||--o{ CARACTERISTICAS_SERVICIO : configura
+    CARACTERISTICAS ||--o{ CARACTERISTICAS_SERVICIO : asigna
+    SERVICIOS ||--o{ AUDITORIA_TARIFAS : registra
+    USUARIOS_ROLES ||--o{ CIERRES : consolida
+```
+Series_factura reserva el folio con bloqueo de fila. Impuestos_historico se consulta por vigencia al emitir. El detalle conserva los importes originales. Eventos_pendientes recibe los eventos dentro de la misma transacción. La aplicación los entrega a DynamoDB con una escritura condicional y reintenta lotes pendientes con operaciones posteriores. El índice historial permite consultar los 100 eventos más recientes del laboratorio.
+
