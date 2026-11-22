@@ -1,0 +1,6 @@
+datos-locales/
+__pycache__/
+.env
+*.sqlite*
+/docs/panel-aws.jpg
+/docs/evidencias/*.jpg
