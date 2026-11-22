@@ -1,0 +1,2 @@
+# Primera práctica · Datos
+En una base PostgreSQL vacía de pruebas, ejecutar con psql -v ON_ERROR_STOP=1 -f database/01_catalogo.sql y luego con -f database/02_datos_catalogo.sql. Repetir el segundo archivo. Verificar SELECT count(*) FROM servicios; (100), FROM caracteristicas (50) y FROM caracteristicas_servicio (100). La clave compuesta impide repetir una asignación. Como primer cambio del integrante, añadir una consulta JOIN por servicio y documentar su resultado en el PR.
