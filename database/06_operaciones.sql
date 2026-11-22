@@ -49,4 +49,18 @@ BEGIN
     UPDATE facturas SET estado=CASE WHEN saldo=0 THEN 'pagada' ELSE 'parcial' END WHERE folio=p_folio;
 END; $$;
 
+CREATE OR REPLACE PROCEDURE cancelar_factura(IN actor text, IN p_folio bigint, IN motivo text)
+LANGUAGE plpgsql AS $$
+DECLARE f facturas%ROWTYPE;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM usuarios_roles WHERE usuario_id=actor AND rol='administrador')
+       THEN RAISE EXCEPTION 'Acceso denegado'; END IF;
+    IF coalesce(length(trim(motivo)),0) NOT BETWEEN 1 AND 160 THEN RAISE EXCEPTION 'Motivo inválido'; END IF;
+    SELECT * INTO STRICT f FROM facturas WHERE folio=p_folio FOR UPDATE;
+    IF f.estado='cancelada' THEN RETURN; END IF;
+    IF EXISTS (SELECT 1 FROM pagos WHERE folio=p_folio) THEN RAISE EXCEPTION 'Hay pagos aplicados'; END IF;
+    INSERT INTO reversiones(folio,actor,motivo,importe) VALUES (p_folio,actor,trim(motivo),-f.total);
+    UPDATE facturas SET estado='cancelada' WHERE folio=p_folio;
+END; $$;
+
 COMMIT;
