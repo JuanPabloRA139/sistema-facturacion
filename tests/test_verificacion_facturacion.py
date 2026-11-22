@@ -31,3 +31,12 @@ class VerificacionFacturacion(unittest.TestCase):
         esperado = {"subtotal": 10500, "iva": 1680, "retencion": 420,
                     "total": 11760, "pagado": 0, "saldo": 11760, "estado": "emitida"}
         self.assertEqual({campo: recibido[campo] for campo in esperado}, esperado)
+
+    def test_reintento_de_emision_conserva_detalle_y_movimiento(self):
+        repetida = self.operar("emitir", **self.solicitud)
+        self.assertEqual(repetida["id"], self.folio)
+        self.assertEqual(len(repetida["conceptos"]), 1)
+        movimientos = self.db.execute(
+            "SELECT concepto, importe FROM movimientos WHERE factura = ?", (self.folio,)
+        ).fetchall()
+        self.assertEqual([tuple(fila) for fila in movimientos], [("emision", 11760)])
