@@ -40,3 +40,10 @@ class VerificacionFacturacion(unittest.TestCase):
             "SELECT concepto, importe FROM movimientos WHERE factura = ?", (self.folio,)
         ).fetchall()
         self.assertEqual([tuple(fila) for fila in movimientos], [("emision", 11760)])
+
+    def test_reintento_respeta_el_precio_historico(self):
+        self.operar("tarifa", "admin", servicio=1, precio=20000)
+        repetida = self.operar("emitir", **self.solicitud)
+        nueva = self.operar("emitir", **{**self.solicitud, "clave": "nueva-tarifa"})
+        self.assertEqual((repetida["id"], repetida["total"]), (self.folio, 11760))
+        self.assertEqual(nueva["total"], 22400)
