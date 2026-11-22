@@ -109,4 +109,29 @@ BEGIN
       WHERE f.folio=p_folio AND (u.rol IN ('auditor','administrador') OR f.usuario_id=actor);
 END; $$;
 
+CREATE OR REPLACE PROCEDURE asignar_caracteristicas(IN actor text, IN ids_servicio integer[], IN ids_caracteristica integer[])
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM usuarios_roles WHERE usuario_id=actor AND rol='administrador')
+       THEN RAISE EXCEPTION 'Acceso denegado'; END IF;
+    IF coalesce(cardinality(ids_servicio),0) NOT BETWEEN 1 AND 100 OR
+       coalesce(cardinality(ids_caracteristica),0) NOT BETWEEN 1 AND 50 THEN RAISE EXCEPTION 'Lote inválido'; END IF;
+    INSERT INTO caracteristicas_servicio(servicio_id,caracteristica_id)
+    SELECT s.id,c.id FROM unnest(ids_servicio) s(id) CROSS JOIN unnest(ids_caracteristica) c(id)
+    ON CONFLICT DO NOTHING;
+END; $$;
+
+CREATE OR REPLACE PROCEDURE cambiar_tarifa(IN actor text, IN p_servicio integer, IN precio_nuevo numeric)
+LANGUAGE plpgsql AS $$
+DECLARE precio_anterior numeric;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM usuarios_roles WHERE usuario_id=actor AND rol='administrador')
+       THEN RAISE EXCEPTION 'Acceso denegado'; END IF;
+    IF precio_nuevo IS NULL OR NOT (precio_nuevo>0 AND precio_nuevo<10000000000 AND precio_nuevo=round(precio_nuevo,2))
+       THEN RAISE EXCEPTION 'Precio inválido'; END IF;
+    SELECT precio INTO STRICT precio_anterior FROM servicios WHERE servicio_id=p_servicio FOR UPDATE;
+    IF precio_anterior=precio_nuevo THEN RETURN; END IF;
+    UPDATE servicios SET precio=precio_nuevo WHERE servicio_id=p_servicio;
+    INSERT INTO auditoria_tarifas(servicio_id,actor,anterior,nuevo) VALUES(p_servicio,actor,precio_anterior,precio_nuevo);
+END; $$;
 COMMIT;
