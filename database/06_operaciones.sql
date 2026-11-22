@@ -63,4 +63,22 @@ BEGIN
     UPDATE facturas SET estado='cancelada' WHERE folio=p_folio;
 END; $$;
 
+CREATE OR REPLACE PROCEDURE cerrar_periodo(IN actor text, IN inicio_periodo date, IN mensual boolean, INOUT resultado numeric)
+LANGUAGE plpgsql AS $$
+DECLARE fin_periodo date;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM usuarios_roles WHERE usuario_id=actor AND rol='administrador')
+       THEN RAISE EXCEPTION 'Acceso denegado'; END IF;
+    IF inicio_periodo IS NULL OR mensual IS NULL OR (mensual AND extract(day FROM inicio_periodo)<>1)
+       THEN RAISE EXCEPTION 'Inicio de periodo inválido'; END IF;
+    fin_periodo := CASE WHEN mensual THEN (inicio_periodo+interval '1 month')::date ELSE inicio_periodo+1 END;
+    IF fin_periodo>CURRENT_DATE THEN RAISE EXCEPTION 'Periodo en curso'; END IF;
+    INSERT INTO cierres(inicio,fin,neto,actor)
+    SELECT inicio_periodo,fin_periodo,coalesce(sum(m.importe),0),actor FROM (
+        SELECT total AS importe FROM facturas WHERE fecha>=inicio_periodo AND fecha<fin_periodo
+        UNION ALL SELECT importe FROM reversiones WHERE fecha>=inicio_periodo AND fecha<fin_periodo
+    ) m ON CONFLICT (inicio,fin) DO NOTHING;
+    SELECT neto INTO STRICT resultado FROM cierres WHERE inicio=inicio_periodo AND fin=fin_periodo;
+END; $$;
+
 COMMIT;
