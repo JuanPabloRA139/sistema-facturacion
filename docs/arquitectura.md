@@ -39,3 +39,8 @@ erDiagram
 ```
 Series_factura reserva el folio con bloqueo de fila. Impuestos_historico se consulta por vigencia al emitir. El detalle conserva los importes originales. Eventos_pendientes recibe los eventos dentro de la misma transacción. La aplicación los entrega a DynamoDB con una escritura condicional y reintenta lotes pendientes con operaciones posteriores. El índice historial permite consultar los 100 eventos más recientes del laboratorio.
 
+## Preguntas para el examen
+- Datos. Explica la diferencia entre el folio y la clave de reintento. Sigue el bloqueo de serie y el índice único en emitir_factura.
+- Backend. Sigue el sub de Cognito desde API Gateway hasta el filtro de permisos en backend/identidades.py y backend/servicios.py. Explica quién decide si un pago es duplicado.
+- Frontend. Sigue un renglón desde el formulario hasta el comprobante e identifica dónde se aplica textContent y dónde se valida el RFC otra vez.
+- AWS. Dibuja los dos recorridos, HTML público y operaciones con JWT. Explica cómo se recupera un evento si falla DynamoDB después de guardar la factura.
