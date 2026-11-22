@@ -1,0 +1,4 @@
+datos-locales/
+__pycache__/
+.env
+*.sqlite*
