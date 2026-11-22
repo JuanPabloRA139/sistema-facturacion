@@ -81,4 +81,32 @@ BEGIN
     SELECT neto INTO STRICT resultado FROM cierres WHERE inicio=inicio_periodo AND fin=fin_periodo;
 END; $$;
 
+CREATE OR REPLACE PROCEDURE antiguedad_saldos(IN actor text, INOUT resultado jsonb)
+LANGUAGE plpgsql AS $$
+BEGIN
+    SELECT coalesce(jsonb_agg(to_jsonb(listado) ORDER BY vence,folio),'[]') INTO resultado FROM (
+        SELECT f.folio,f.vence,greatest(CURRENT_DATE-f.vence,0) AS dias_vencidos,
+               f.total-coalesce(sum(p.importe),0) AS saldo
+        FROM facturas f JOIN usuarios_roles u ON u.usuario_id=actor
+        LEFT JOIN pagos p ON p.folio=f.folio
+        WHERE (u.rol IN ('auditor','administrador') OR f.usuario_id=actor)
+          AND f.estado IN ('emitida','parcial')
+        GROUP BY f.folio ORDER BY f.vence,f.folio LIMIT 200
+    ) listado;
+END; $$;
+
+CREATE OR REPLACE PROCEDURE generar_comprobante(IN actor text, IN p_folio bigint, INOUT resultado jsonb)
+LANGUAGE plpgsql AS $$
+BEGIN
+    SELECT jsonb_build_object('folio',f.folio,'fecha',f.fecha,'cliente',c.nombre,'rfc',c.rfc,
+        'estado',f.estado,'subtotal',f.subtotal,'descuento',f.descuento,'iva',f.iva,'retencion',f.retencion,
+        'total',f.total,'pagado',p.suma,'saldo',CASE WHEN f.estado='cancelada' THEN 0 ELSE f.total-p.suma END,
+        'conceptos',(SELECT jsonb_agg(jsonb_build_object('nombre',d.descripcion,'cantidad',d.cantidad,
+                    'precio',d.precio) ORDER BY d.renglon) FROM detalle_factura d WHERE d.folio=f.folio))
+      INTO STRICT resultado
+      FROM facturas f JOIN clientes c USING(cliente_id) JOIN usuarios_roles u ON u.usuario_id=actor
+      CROSS JOIN LATERAL (SELECT coalesce(sum(importe),0) AS suma FROM pagos WHERE folio=f.folio) p
+      WHERE f.folio=p_folio AND (u.rol IN ('auditor','administrador') OR f.usuario_id=actor);
+END; $$;
+
 COMMIT;
