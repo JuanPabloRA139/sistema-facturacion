@@ -55,3 +55,19 @@ class VerificacionFacturacion(unittest.TestCase):
         self.assertEqual((recibo["estado"], recibo["pagado"], recibo["saldo"]),
                          ("parcial", 5000, 6760))
         self.assertEqual(cartera[self.folio], recibo["saldo"])
+
+    def test_reintento_de_pago_se_registra_una_vez(self):
+        primero = self.pagar(5000)
+        segundo = self.pagar(5000)
+        self.assertFalse(primero["pago_duplicado"])
+        self.assertTrue(segundo["pago_duplicado"])
+        self.assertEqual(segundo["saldo"], 6760)
+        cobros = self.db.execute(
+            "SELECT count(*), sum(importe) FROM pagos WHERE factura = ?", (self.folio,)
+        ).fetchone()
+        self.assertEqual(tuple(cobros), (1, 5000))
+        eventos = self.db.execute(
+            "SELECT count(*) FROM auditoria WHERE accion = 'pago' AND entidad = ?",
+            (str(self.folio),)
+        ).fetchone()[0]
+        self.assertEqual(eventos, 1)
