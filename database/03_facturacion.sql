@@ -21,4 +21,29 @@ CREATE TABLE IF NOT EXISTS series_factura (
     ultimo bigint NOT NULL CHECK (ultimo >= 0)
 );
 INSERT INTO series_factura VALUES ('A',0) ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS facturas (
+    folio bigint PRIMARY KEY,
+    usuario_id text NOT NULL REFERENCES usuarios_roles,
+    cliente_id bigint NOT NULL REFERENCES clientes,
+    clave uuid NOT NULL,
+    conceptos_solicitados jsonb NOT NULL,
+    fecha date NOT NULL DEFAULT CURRENT_DATE,
+    vence date NOT NULL DEFAULT (CURRENT_DATE+30),
+    estado text NOT NULL DEFAULT 'emitida' CHECK (estado IN ('emitida','parcial','pagada','cancelada')),
+    subtotal numeric(16,2) NOT NULL,
+    descuento numeric(16,2) NOT NULL,
+    iva numeric(16,2) NOT NULL,
+    retencion numeric(16,2) NOT NULL,
+    total numeric(16,2) NOT NULL,
+    UNIQUE (usuario_id,clave)
+);
+CREATE TABLE IF NOT EXISTS detalle_factura (
+    folio bigint REFERENCES facturas,
+    renglon integer NOT NULL,
+    servicio_id integer NOT NULL REFERENCES servicios,
+    descripcion text NOT NULL,
+    precio numeric(12,2) NOT NULL,
+    cantidad integer NOT NULL CHECK (cantidad BETWEEN 1 AND 999),
+    PRIMARY KEY (folio,renglon)
+);
 COMMIT;
