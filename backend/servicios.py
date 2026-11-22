@@ -3,7 +3,7 @@ from datetime import date
 import re
 import unicodedata
 
-from backend.rfc import formato_rfc_valido
+from backend.rfc import validar_rfc
 
 
 class TotalModificado(ValueError):
@@ -39,9 +39,7 @@ def inicio(repo, datos):
 
 def cliente(repo, datos):
     nombre = cadena(datos.get("nombre"), 100)
-    rfc = cadena(datos.get("rfc"), 13).upper()
-    if not formato_rfc_valido(rfc):
-        raise ValueError("Formato de RFC incompatible.")
+    rfc = validar_rfc(cadena(datos.get("rfc"), 13))
     return {"cliente": repo.crear_cliente(nombre, rfc)}
 
 

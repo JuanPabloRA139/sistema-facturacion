@@ -1,0 +1,662 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Facturación y servicios",
+    "version": "1.0.0"
+  },
+  "security": [
+    {
+      "Cognito": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "Cognito": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/api/inicio": {
+      "post": {
+        "summary": "Panel inicial",
+        "operationId": "inicio",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/cliente": {
+      "post": {
+        "summary": "Alta de cliente",
+        "operationId": "cliente",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "nombre",
+                  "rfc"
+                ],
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "rfc": {
+                    "type": "string",
+                    "minLength": 12,
+                    "maxLength": 13,
+                    "description": "Se quitan los espacios de los extremos y se convierte a mayúsculas. Se revisan la estructura del RFC y la fecha de calendario.",
+                    "example": "ZETA000229AB1"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/emitir": {
+      "post": {
+        "summary": "Emisión con clave de reintento",
+        "operationId": "emitir",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "cliente",
+                  "clave",
+                  "conceptos"
+                ],
+                "properties": {
+                  "cliente": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000000
+                  },
+                  "clave": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Reutiliza la misma clave al reintentar la misma factura."
+                  },
+                  "conceptos": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 30,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "servicio",
+                        "cantidad"
+                      ],
+                      "properties": {
+                        "servicio": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000000
+                        },
+                        "cantidad": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 999
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "total_esperado": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000000000000,
+                    "description": "Total que vio el operador, en centavos de MXN. El servidor calcula el importe con sus propias tarifas."
+                  }
+                },
+                "additionalProperties": false
+              },
+              "examples": {
+                "importeConfirmado": {
+                  "summary": "El servicio suma $117.60 y el operador confirma $117.60",
+                  "value": {
+                    "cliente": 1,
+                    "clave": "a4a835eb-0524-4271-b663-d14c132a70e3",
+                    "conceptos": [
+                      {
+                        "servicio": 1,
+                        "cantidad": 1
+                      }
+                    ],
+                    "total_esperado": 11760
+                  }
+                },
+                "importeDistinto": {
+                  "summary": "El servicio suma $117.60 y el operador vio $117.59",
+                  "value": {
+                    "cliente": 1,
+                    "clave": "a4a835eb-0524-4271-b663-d14c132a70e3",
+                    "conceptos": [
+                      {
+                        "servicio": 1,
+                        "cantidad": 1
+                      }
+                    ],
+                    "total_esperado": 11759
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual. Si cambió el total, la operación se revierte y el operador debe revisar el resumen antes de volver a confirmar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "error": "El total cambió. Revisa el resumen y confirma nuevamente."
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/comprobante": {
+      "post": {
+        "summary": "Comprobante del folio",
+        "operationId": "comprobante",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "factura"
+                ],
+                "properties": {
+                  "factura": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/pago": {
+      "post": {
+        "summary": "Pago parcial o total",
+        "operationId": "pago",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "factura",
+                  "referencia",
+                  "importe"
+                ],
+                "properties": {
+                  "factura": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "referencia": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "importe": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Centavos de MXN"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/cancelar": {
+      "post": {
+        "summary": "Cancelación y movimiento de reversión",
+        "operationId": "cancelar",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "factura",
+                  "motivo"
+                ],
+                "properties": {
+                  "factura": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "motivo": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/cierre": {
+      "post": {
+        "summary": "Cierre de día o mes terminado",
+        "operationId": "cierre",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "periodo"
+                ],
+                "properties": {
+                  "periodo": {
+                    "type": "string",
+                    "example": "2026-10"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/saldos": {
+      "post": {
+        "summary": "Antigüedad de saldos",
+        "operationId": "saldos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/asignar": {
+      "post": {
+        "summary": "Asignación masiva",
+        "operationId": "asignar",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "servicios",
+                  "caracteristicas"
+                ],
+                "properties": {
+                  "servicios": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "caracteristicas": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/tarifa": {
+      "post": {
+        "summary": "Cambio auditado de precio",
+        "operationId": "tarifa",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "servicio",
+                  "precio"
+                ],
+                "properties": {
+                  "servicio": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "precio": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Centavos de MXN"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    },
+    "/api/auditoria": {
+      "post": {
+        "summary": "Eventos de auditoría",
+        "operationId": "auditoria",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Iniciar sesión"
+          },
+          "403": {
+            "description": "Rol sin permiso"
+          },
+          "404": {
+            "description": "Registro fuera de alcance"
+          },
+          "409": {
+            "description": "Conflicto con el estado actual"
+          },
+          "503": {
+            "description": "Servicio temporalmente no disponible"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2 @@
+# Primera práctica · Backend
+Desde la raíz ejecutar python -m unittest discover -s tests -p test_rfc_backend.py. La función recibe un valor sin confiar en el navegador y usa la fecha para detectar días imposibles. Es el punto de validación para la futura ruta de clientes. Agregar un caso límite propio y coordinar su resultado con frontend. Documentar en el PR los límites de esta validación preliminar.

@@ -9,6 +9,7 @@ import time
 import webbrowser
 from threading import Lock
 from backend.entrada import leer_objeto
+from backend.servicios import TotalModificado
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -124,6 +125,8 @@ class Peticion(BaseHTTPRequestHandler):
             return self.enviar(200,respuesta)
         except PermissionError:
             return self.enviar(403,{"error":"Tu rol no permite esta operación."})
+        except TotalModificado as err:
+            return self.enviar(409, {"error": str(err)})
         except sqlite3.IntegrityError:
             return self.enviar(409,{"error":"El registro ya existe o contiene referencias inválidas."})
         except (ValueError,TypeError,UnicodeError) as err:
