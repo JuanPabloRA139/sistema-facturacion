@@ -23,4 +23,12 @@ BEGIN
     VALUES(recurso,TG_ARGV[0],coalesce(nullif(sujeto,''),current_user),datos);
     RETURN NEW;
 END; $$;
+CREATE OR REPLACE TRIGGER auditar_emision AFTER INSERT ON facturas
+ FOR EACH ROW EXECUTE FUNCTION preparar_evento('emisión');
+CREATE OR REPLACE TRIGGER auditar_pago AFTER INSERT ON pagos
+ FOR EACH ROW EXECUTE FUNCTION preparar_evento('pago');
+CREATE OR REPLACE TRIGGER auditar_cancelacion AFTER INSERT ON reversiones
+ FOR EACH ROW EXECUTE FUNCTION preparar_evento('cancelación');
+CREATE OR REPLACE TRIGGER auditar_tarifa AFTER INSERT ON auditoria_tarifas
+ FOR EACH ROW EXECUTE FUNCTION preparar_evento('tarifa');
 COMMIT;
