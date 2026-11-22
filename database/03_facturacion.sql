@@ -46,4 +46,11 @@ CREATE TABLE IF NOT EXISTS detalle_factura (
     cantidad integer NOT NULL CHECK (cantidad BETWEEN 1 AND 999),
     PRIMARY KEY (folio,renglon)
 );
+CREATE TABLE IF NOT EXISTS pagos (
+    pago_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    folio bigint NOT NULL REFERENCES facturas,
+    referencia text NOT NULL,
+    importe numeric(16,2) NOT NULL CHECK (importe>0),
+    UNIQUE (folio,referencia)
+);
 COMMIT;
