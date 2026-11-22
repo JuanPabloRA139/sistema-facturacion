@@ -1,0 +1,737 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Facturacion y Servicios - AWS Academy",
+  "Parameters": {
+    "ArtifactBucket": {
+      "Type": "String"
+    },
+    "ArtifactKey": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "Vpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.74.0.0/24",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true
+      }
+    },
+    "SubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.74.0.0/26",
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "SubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.74.0.64/26",
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "Routes": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "AssocA": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "Routes"
+        },
+        "SubnetId": {
+          "Ref": "SubnetA"
+        }
+      }
+    },
+    "AssocB": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "Routes"
+        },
+        "SubnetId": {
+          "Ref": "SubnetB"
+        }
+      }
+    },
+    "AppGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "facturacion App",
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "DBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "facturacion DB",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "AppGroup"
+            }
+          }
+        ]
+      }
+    },
+    "EndpointGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "facturacion Endpoint",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {
+              "Ref": "AppGroup"
+            }
+          }
+        ]
+      }
+    },
+    "SecretsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "VpcEndpointType": "Interface",
+        "PrivateDnsEnabled": true,
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointGroup"
+          }
+        ],
+        "SubnetIds": [
+          {
+            "Ref": "SubnetA"
+          }
+        ],
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.secretsmanager"
+        }
+      }
+    },
+    "DynamoEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "VpcEndpointType": "Gateway",
+        "RouteTableIds": [
+          {
+            "Ref": "Routes"
+          }
+        ],
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+        }
+      }
+    },
+    "MasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"facturacion_owner\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludePunctuation": true
+        }
+      }
+    },
+    "AppSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"facturacion_app\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludePunctuation": true
+        }
+      }
+    },
+    "DBSubnets": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "subredes privadas facturacion",
+        "SubnetIds": [
+          {
+            "Ref": "SubnetA"
+          },
+          {
+            "Ref": "SubnetB"
+          }
+        ]
+      }
+    },
+    "Database": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "postgres",
+        "DBName": "facturacion",
+        "DBInstanceClass": "db.t4g.micro",
+        "AllocatedStorage": "20",
+        "StorageType": "gp3",
+        "StorageEncrypted": true,
+        "PubliclyAccessible": false,
+        "MultiAZ": false,
+        "BackupRetentionPeriod": 1,
+        "CopyTagsToSnapshot": true,
+        "MasterUsername": "facturacion_owner",
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${MasterSecret}:SecretString:password}}"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DBGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnets"
+        },
+        "AutoMinorVersionUpgrade": true
+      }
+    },
+    "Audit": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "entidad",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "evento",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "listado",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "entidad",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "evento",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "historial",
+            "KeySchema": [
+              {
+                "AttributeName": "listado",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "evento",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ]
+      }
+    },
+    "Http": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-http"
+        },
+        "ProtocolType": "HTTP"
+      }
+    },
+    "Stage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Http"
+        },
+        "StageName": "$default",
+        "AutoDeploy": true,
+        "DefaultRouteSettings": {
+          "ThrottlingRateLimit": 10,
+          "ThrottlingBurstLimit": 20
+        }
+      }
+    },
+    "Users": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "UserPoolName": {
+          "Fn::Sub": "${AWS::StackName}-usuarios"
+        },
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": true
+        },
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 12,
+            "RequireUppercase": true,
+            "RequireLowercase": true,
+            "RequireNumbers": true,
+            "RequireSymbols": true
+          }
+        }
+      }
+    },
+    "LoginDomain": {
+      "Type": "AWS::Cognito::UserPoolDomain",
+      "Properties": {
+        "Domain": {
+          "Fn::Sub": "factura-${Http}"
+        },
+        "UserPoolId": {
+          "Ref": "Users"
+        }
+      }
+    },
+    "Client": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "UserPoolId": {
+          "Ref": "Users"
+        },
+        "GenerateSecret": false,
+        "SupportedIdentityProviders": [
+          "COGNITO"
+        ],
+        "AllowedOAuthFlowsUserPoolClient": true,
+        "AllowedOAuthFlows": [
+          "code"
+        ],
+        "AllowedOAuthScopes": [
+          "openid"
+        ],
+        "CallbackURLs": [
+          {
+            "Fn::Sub": "https://${Http}.execute-api.${AWS::Region}.${AWS::URLSuffix}/"
+          }
+        ],
+        "LogoutURLs": [
+          {
+            "Fn::Sub": "https://${Http}.execute-api.${AWS::Region}.${AWS::URLSuffix}/"
+          }
+        ],
+        "PreventUserExistenceErrors": "ENABLED"
+      }
+    },
+    "Authorizer": {
+      "Type": "AWS::ApiGatewayV2::Authorizer",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Http"
+        },
+        "Name": "CognitoJWT",
+        "AuthorizerType": "JWT",
+        "IdentitySource": [
+          "$request.header.Authorization"
+        ],
+        "JwtConfiguration": {
+          "Issuer": {
+            "Fn::Sub": "https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${Users}"
+          },
+          "Audience": [
+            {
+              "Ref": "Client"
+            }
+          ]
+        }
+      }
+    },
+    "Web": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "python3.12",
+        "Handler": "backend.web_aws.handler",
+        "MemorySize": 256,
+        "Timeout": 8,
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          }
+        },
+        "Role": {
+          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/LabRole"
+        },
+        "Environment": {
+          "Variables": {
+            "LOGIN_DOMAIN": {
+              "Fn::Sub": "https://factura-${Http}.auth.${AWS::Region}.amazoncognito.com"
+            },
+            "CLIENT_ID": {
+              "Ref": "Client"
+            }
+          }
+        }
+      }
+    },
+    "WebIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Http"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::GetAtt": [
+            "Web",
+            "Arn"
+          ]
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "WebPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "Web"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Http}/*/GET/*"
+        }
+      }
+    },
+    "Api": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "python3.12",
+        "Handler": "backend.api_aws.handler",
+        "MemorySize": 256,
+        "Timeout": 26,
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          }
+        },
+        "Role": {
+          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/LabRole"
+        },
+        "Environment": {
+          "Variables": {
+            "DB_HOST": {
+              "Fn::GetAtt": [
+                "Database",
+                "Endpoint.Address"
+              ]
+            },
+            "DB_NAME": "facturacion",
+            "DB_SECRET": {
+              "Ref": "AppSecret"
+            },
+            "RDS_CA_FILE": "/var/task/certs/rds.pem",
+            "AUDIT_TABLE": {
+              "Ref": "Audit"
+            },
+            "IDENTITY_HOST": {
+              "Fn::GetAtt": [
+                "IdentityDatabase",
+                "Endpoint.Address"
+              ]
+            },
+            "IDENTITY_SECRET": {
+              "Ref": "IdentityAppSecret"
+            }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "AppGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SubnetA"
+            },
+            {
+              "Ref": "SubnetB"
+            }
+          ]
+        }
+      }
+    },
+    "ApiIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Http"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::GetAtt": [
+            "Api",
+            "Arn"
+          ]
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "ApiPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "Api"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Http}/*/POST/api/*"
+        }
+      }
+    },
+    "Admin": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "python3.12",
+        "Handler": "backend.admin_aws.handler",
+        "MemorySize": 256,
+        "Timeout": 90,
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          }
+        },
+        "Role": {
+          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/LabRole"
+        },
+        "Environment": {
+          "Variables": {
+            "DB_HOST": {
+              "Fn::GetAtt": [
+                "Database",
+                "Endpoint.Address"
+              ]
+            },
+            "DB_NAME": "facturacion",
+            "DB_SECRET": {
+              "Ref": "AppSecret"
+            },
+            "RDS_CA_FILE": "/var/task/certs/rds.pem",
+            "AUDIT_TABLE": {
+              "Ref": "Audit"
+            },
+            "MASTER_SECRET": {
+              "Ref": "MasterSecret"
+            },
+            "IDENTITY_HOST": {
+              "Fn::GetAtt": [
+                "IdentityDatabase",
+                "Endpoint.Address"
+              ]
+            },
+            "IDENTITY_SECRET": {
+              "Ref": "IdentityAppSecret"
+            },
+            "IDENTITY_MASTER_SECRET": {
+              "Ref": "IdentityMasterSecret"
+            }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "AppGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SubnetA"
+            },
+            {
+              "Ref": "SubnetB"
+            }
+          ]
+        }
+      }
+    },
+    "Home": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Http"
+        },
+        "RouteKey": "GET /",
+        "Target": {
+          "Fn::Sub": "integrations/${WebIntegration}"
+        }
+      }
+    },
+    "Asset": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Http"
+        },
+        "RouteKey": "GET /{archivo}",
+        "Target": {
+          "Fn::Sub": "integrations/${WebIntegration}"
+        }
+      }
+    },
+    "Operations": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Http"
+        },
+        "RouteKey": "POST /api/{accion}",
+        "Target": {
+          "Fn::Sub": "integrations/${ApiIntegration}"
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "Authorizer"
+        },
+        "AuthorizationScopes": [
+          "openid"
+        ]
+      }
+    },
+    "IdentityMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"identidad_owner\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludePunctuation": true
+        }
+      }
+    },
+    "IdentityAppSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"identidad_lectura\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludePunctuation": true
+        }
+      }
+    },
+    "IdentityDatabase": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "postgres",
+        "DBName": "identidades",
+        "DBInstanceClass": "db.t4g.micro",
+        "AllocatedStorage": "20",
+        "StorageType": "gp3",
+        "StorageEncrypted": true,
+        "PubliclyAccessible": false,
+        "MultiAZ": false,
+        "BackupRetentionPeriod": 1,
+        "CopyTagsToSnapshot": true,
+        "MasterUsername": "identidad_owner",
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${IdentityMasterSecret}:SecretString:password}}"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DBGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnets"
+        },
+        "AutoMinorVersionUpgrade": true
+      }
+    }
+  },
+  "Outputs": {
+    "Url": {
+      "Value": {
+        "Fn::Sub": "https://${Http}.execute-api.${AWS::Region}.${AWS::URLSuffix}/"
+      }
+    },
+    "UserPool": {
+      "Value": {
+        "Ref": "Users"
+      }
+    },
+    "AdminFunction": {
+      "Value": {
+        "Ref": "Admin"
+      }
+    },
+    "Database": {
+      "Value": {
+        "Ref": "Database"
+      }
+    },
+    "AuditTable": {
+      "Value": {
+        "Ref": "Audit"
+      }
+    },
+    "IdentityDatabase": {
+      "Value": {
+        "Ref": "IdentityDatabase"
+      }
+    }
+  }
+}

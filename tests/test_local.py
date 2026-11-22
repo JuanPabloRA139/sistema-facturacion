@@ -46,6 +46,40 @@ class FlujoHTTP(unittest.TestCase):
         c.request("POST","/api/"+accion,json.dumps(p),{"Origin":self.s.origen,"Content-Type":"application/json","Cookie":self.tokens.get(usuario,"")})
         r=c.getresponse(); data=json.loads(r.read()); cookie=r.getheader("Set-Cookie");c.close()
         return r.status,data,cookie
+    def test_alta_distingue_formato_y_fecha_del_rfc(self):
+        def clientes():
+            return self.peticion("inicio", {}, "operador")[1]["clientes"]
+
+        antes = clientes()
+        for rfc, motivo in (("ABC", "formato del RFC"), ("ZETA010229AB1", "fecha del RFC")):
+            with self.subTest(rfc=rfc):
+                codigo, cuerpo, _ = self.peticion("cliente", {"nombre": "Taller", "rfc": rfc}, "operador")
+                self.assertEqual(codigo, 400)
+                self.assertIn(motivo, cuerpo["error"])
+                self.assertEqual(clientes(), antes)
+
+    def test_pago_rechazado_explica_el_motivo_y_conserva_el_saldo(self):
+        def enviar(accion, datos, usuario="operador"):
+            return self.peticion(accion, datos, usuario)[:2]
+
+        cliente = enviar("inicio", {})[1]["clientes"][0]["id"]
+        codigo, factura = enviar("emitir", {"cliente": cliente, "clave": "pago-rechazado",
+                                            "conceptos": [{"servicio": 1, "cantidad": 1}]})
+        self.assertEqual(codigo, 200)
+        folio = {"factura": factura["id"]}
+        pago = {**folio, "referencia": "PAGO-01", "importe": factura["saldo"] + 1}
+        codigo, error = enviar("pago", pago)
+        self.assertEqual(codigo, 400)
+        self.assertIn("supera el saldo", error["error"])
+        self.assertEqual(enviar("comprobante", folio)[1]["saldo"], factura["total"])
+
+        self.assertEqual(enviar("cancelar", {**folio, "motivo": "Solicitud del cliente"}, "admin")[0], 200)
+        codigo, error = enviar("pago", {**pago, "importe": 1})
+        self.assertEqual(codigo, 400)
+        self.assertIn("cancelada", error["error"])
+        comprobante = enviar("comprobante", folio)[1]
+        self.assertEqual((comprobante["estado"], comprobante["pagado"], comprobante["saldo"]), ("cancelada", 0, 0))
+
     def test_recorrido(self):
         def ok(a,p,u="operador"):
             status,r,_=self.peticion(a,p,u);self.assertEqual(status,200,r);return r
@@ -82,10 +116,19 @@ class FlujoHTTP(unittest.TestCase):
             return self.peticion(accion,p,"operador")[:2]
         nombre = "O'Connor & Hijos <Norte>"
         _,c=hacer("cliente",{"nombre":nombre,"rfc":"ZETA000229AB1"})
-        p={"cliente":c["cliente"],"clave":"confirmada","conceptos":[{"servicio":1,"cantidad":1}]}
-        self.assertIn(hacer("emitir",{**p,"total_esperado":11759})[0], (400,409))
+        contrato = Path(__file__).resolve().parents[1] / "docs" / "openapi.json"
+        emitir = json.loads(contrato.read_bytes())["paths"]["/api/emitir"]["post"]
+        ejemplos = emitir["requestBody"]["content"]["application/json"]["examples"]
+        p = {**ejemplos["importeConfirmado"]["value"], "cliente": c["cliente"]}
+        distinto = {**ejemplos["importeDistinto"]["value"], "cliente": c["cliente"]}
+        self.assertEqual(distinto["total_esperado"], p["total_esperado"] - 1)
+        codigo, error = hacer("emitir", distinto)
+        self.assertEqual(codigo, 409)
+        self.assertEqual(error, emitir["responses"]["409"]["content"]["application/json"]["example"])
         self.assertEqual(hacer("inicio",{})[1]["facturas"],[])
-        _,f=hacer("emitir",{**p,"total_esperado":11760})
+        codigo, f = hacer("emitir", p)
+        self.assertEqual(codigo, 200)
+        self.assertEqual(f["total"], p["total_esperado"])
         self.assertEqual(f["cliente_nombre"],nombre)
         self.assertEqual(hacer("emitir",{**p,"total_esperado":11760})[1]["id"],f["id"])
         self.assertEqual(hacer("emitir",{**p,"conceptos":[{"servicio":1,"cantidad":2}]})[0],400)
