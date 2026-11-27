@@ -96,7 +96,26 @@ def asignar(repo, datos):
 
 
 def saldos(repo, datos):
-    return repo.saldos()
+    if not datos:
+        return repo.saldos()
+    if datos.get("paginado") is not True:
+        raise ValueError("La consulta por páginas requiere paginado=true.")
+    despues = datos.get("despues_de")
+    if "despues_de" in datos:
+        if not isinstance(despues, dict) or set(despues) != {"vence", "folio"}:
+            raise ValueError("El cursor de saldos requiere fecha de vencimiento y folio.")
+        fecha = despues["vence"]
+        if not isinstance(fecha, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", fecha):
+            raise ValueError("Fecha de vencimiento inválida.")
+        date.fromisoformat(fecha)
+        entero(despues["folio"], 2**53 - 1)
+    registros = repo.saldos(paginado=True, despues_de=despues)
+    filas = registros[:200]
+    siguiente = None
+    if len(registros) > len(filas):
+        ultima = filas[-1]
+        siguiente = {"vence": ultima["vence"], "folio": ultima["folio"]}
+    return {"filas": filas, "siguiente": siguiente}
 
 
 def cierre(repo, datos):
@@ -132,7 +151,7 @@ CAMPOS = {
     "inicio": (), "cliente": ("nombre", "rfc"), "emitir": ("clave", "cliente", "conceptos", "total_esperado"),
     "comprobante": ("factura",), "pago": ("factura", "referencia", "importe"),
     "cancelar": ("factura", "motivo"), "tarifa": ("servicio", "precio"),
-    "asignar": ("servicios", "caracteristicas"), "saldos": (), "cierre": ("periodo",), "auditoria": (),
+    "asignar": ("servicios", "caracteristicas"), "saldos": ("paginado", "despues_de"), "cierre": ("periodo",), "auditoria": (),
 }
 
 
