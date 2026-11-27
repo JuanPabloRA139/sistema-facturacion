@@ -7,6 +7,30 @@
     },
     "ArtifactKey": {
       "Type": "String"
+    },
+    "WebRoleName": {
+      "Type": "String",
+      "Default": "LabRole",
+      "MinLength": 1,
+      "MaxLength": 64,
+      "AllowedPattern": "[A-Za-z0-9_+=,.@-]+",
+      "Description": "Nombre del rol IAM existente para Lambda Web (sin ruta)."
+    },
+    "ApiRoleName": {
+      "Type": "String",
+      "Default": "LabRole",
+      "MinLength": 1,
+      "MaxLength": 64,
+      "AllowedPattern": "[A-Za-z0-9_+=,.@-]+",
+      "Description": "Nombre del rol IAM existente para Lambda Api (sin ruta)."
+    },
+    "AdminRoleName": {
+      "Type": "String",
+      "Default": "LabRole",
+      "MinLength": 1,
+      "MaxLength": 64,
+      "AllowedPattern": "[A-Za-z0-9_+=,.@-]+",
+      "Description": "Nombre del rol IAM existente para Lambda Admin (sin ruta)."
     }
   },
   "Resources": {
@@ -406,7 +430,7 @@
           }
         },
         "Role": {
-          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/LabRole"
+          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${WebRoleName}"
         },
         "Environment": {
           "Variables": {
@@ -465,7 +489,7 @@
           }
         },
         "Role": {
-          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/LabRole"
+          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ApiRoleName}"
         },
         "Environment": {
           "Variables": {
@@ -556,7 +580,7 @@
           }
         },
         "Role": {
-          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/LabRole"
+          "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AdminRoleName}"
         },
         "Environment": {
           "Variables": {
