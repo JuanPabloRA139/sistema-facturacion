@@ -48,6 +48,10 @@ def comprobante(cursor, usuario, folio):
 
 
 def preparar_actor(cursor, usuario, consultar_rol):
+    # Son límites del servidor PostgreSQL para esta transacción. El timeout
+    # del socket por sí solo no fija cuánto tiempo espera PostgreSQL un bloqueo.
+    cursor.execute("SET LOCAL lock_timeout = '2s'")
+    cursor.execute("SET LOCAL statement_timeout = '4s'")
     cursor.execute("SELECT pg_advisory_xact_lock_shared(hashtextextended(%s, 0))", (usuario,))
     rol = consultar_rol(usuario)
     cursor.execute("SELECT rol FROM usuarios_roles WHERE usuario_id=%s", (usuario,))
@@ -104,8 +108,9 @@ class FacturacionPostgres:
     def asignar(self, servicios, caracteristicas):
         self.cursor.execute("CALL asignar_caracteristicas(%s,%s::integer[],%s::integer[])", (self.usuario, servicios, caracteristicas))
 
-    def saldos(self):
-        self.cursor.execute("CALL antiguedad_saldos(%s,NULL)", (self.usuario,))
+    def saldos(self, *, paginado=False, despues_de=None):
+        solicitud = json.dumps({"paginado": True, "despues_de": despues_de}) if paginado else None
+        self.cursor.execute("CALL antiguedad_saldos(%s,%s::jsonb)", (self.usuario, solicitud))
         reporte = estructura(self.cursor.fetchone()[0])
         for fila in reporte:
             fila["saldo"] = centavos(fila["saldo"])

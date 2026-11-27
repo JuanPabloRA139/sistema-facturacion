@@ -2,7 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Facturación y servicios",
-    "version": "1.0.0"
+    "version": "1.1.0",
+    "description": "API detrás de API Gateway. Requiere un token de acceso de Cognito. Los importes se expresan en centavos de MXN y las tasas en puntos base. Las solicitudes usan objetos JSON UTF-8 de hasta 32768 bytes, con nombres de campo únicos y cantidades enteras. Los textos se validan tras recortar espacios en sus extremos. Se rechazan los caracteres de control."
   },
   "security": [
     {
@@ -15,6 +16,642 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ErrorGateway": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EstadoFactura": {
+        "type": "string",
+        "enum": [
+          "emitida",
+          "parcial",
+          "pagada",
+          "cancelada"
+        ]
+      },
+      "Rol": {
+        "type": "string",
+        "enum": [
+          "operador",
+          "administrador",
+          "auditor"
+        ]
+      },
+      "Catalogo": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "nombre": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Servicio": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "precio"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "precio": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResumenFactura": {
+        "type": "object",
+        "required": [
+          "id",
+          "fecha",
+          "total",
+          "estado"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoFactura"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Panel": {
+        "type": "object",
+        "required": [
+          "tasas",
+          "rol",
+          "usuario",
+          "servicios",
+          "caracteristicas",
+          "clientes",
+          "facturas"
+        ],
+        "properties": {
+          "tasas": {
+            "type": "object",
+            "required": [
+              "iva",
+              "retencion"
+            ],
+            "properties": {
+              "iva": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              "retencion": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            },
+            "additionalProperties": false
+          },
+          "rol": {
+            "$ref": "#/components/schemas/Rol"
+          },
+          "usuario": {
+            "type": "string"
+          },
+          "servicios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Servicio"
+            },
+            "maxItems": 500
+          },
+          "caracteristicas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Catalogo"
+            },
+            "maxItems": 500
+          },
+          "clientes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Catalogo"
+            },
+            "maxItems": 500
+          },
+          "facturas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResumenFactura"
+            },
+            "maxItems": 100
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConceptoComprobante": {
+        "type": "object",
+        "required": [
+          "nombre",
+          "cantidad",
+          "precio"
+        ],
+        "properties": {
+          "nombre": {
+            "type": "string"
+          },
+          "cantidad": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999
+          },
+          "precio": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Comprobante": {
+        "type": "object",
+        "required": [
+          "id",
+          "fecha",
+          "cliente_nombre",
+          "rfc",
+          "estado",
+          "subtotal",
+          "descuento",
+          "iva",
+          "retencion",
+          "total",
+          "pagado",
+          "saldo",
+          "conceptos"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date"
+          },
+          "cliente_nombre": {
+            "type": "string"
+          },
+          "rfc": {
+            "type": "string"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoFactura"
+          },
+          "subtotal": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "descuento": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "iva": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "retencion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "pagado": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "saldo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "conceptos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConceptoComprobante"
+            },
+            "maxItems": 30,
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "ComprobantePago": {
+        "type": "object",
+        "required": [
+          "id",
+          "fecha",
+          "cliente_nombre",
+          "rfc",
+          "estado",
+          "subtotal",
+          "descuento",
+          "iva",
+          "retencion",
+          "total",
+          "pagado",
+          "saldo",
+          "conceptos",
+          "pago_duplicado"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date"
+          },
+          "cliente_nombre": {
+            "type": "string"
+          },
+          "rfc": {
+            "type": "string"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoFactura"
+          },
+          "subtotal": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "descuento": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "iva": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "retencion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "pagado": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "saldo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          },
+          "conceptos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConceptoComprobante"
+            },
+            "maxItems": 30,
+            "minItems": 1
+          },
+          "pago_duplicado": {
+            "type": "boolean",
+            "description": "Verdadero si ya existía el mismo pago en este folio."
+          }
+        },
+        "additionalProperties": false
+      },
+      "FilaCartera": {
+        "type": "object",
+        "required": [
+          "folio",
+          "vence",
+          "dias_vencidos",
+          "saldo"
+        ],
+        "properties": {
+          "folio": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "vence": {
+            "type": "string",
+            "format": "date"
+          },
+          "dias_vencidos": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "saldo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Centavos de MXN."
+          }
+        },
+        "additionalProperties": false
+      },
+      "FilasCartera": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/FilaCartera"
+        },
+        "maxItems": 200
+      },
+      "CursorCartera": {
+        "type": "object",
+        "required": [
+          "vence",
+          "folio"
+        ],
+        "properties": {
+          "vence": {
+            "type": "string",
+            "format": "date"
+          },
+          "folio": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaginaCartera": {
+        "type": "object",
+        "required": [
+          "filas",
+          "siguiente"
+        ],
+        "properties": {
+          "filas": {
+            "$ref": "#/components/schemas/FilasCartera"
+          },
+          "siguiente": {
+            "type": "object",
+            "required": [
+              "vence",
+              "folio"
+            ],
+            "properties": {
+              "vence": {
+                "type": "string",
+                "format": "date"
+              },
+              "folio": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            },
+            "additionalProperties": false,
+            "nullable": true,
+            "description": "Clave de la última fila devuelta cuando quedan filas. null indica el final."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EventoAuditoria": {
+        "type": "object",
+        "required": [
+          "fecha",
+          "usuario",
+          "accion",
+          "entidad",
+          "detalle"
+        ],
+        "properties": {
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "usuario": {
+            "type": "string"
+          },
+          "accion": {
+            "type": "string"
+          },
+          "entidad": {
+            "type": "string"
+          },
+          "detalle": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "responses": {
+      "EntradaInvalida": {
+        "description": "El cuerpo, la acción o sus valores no cumplen las reglas.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "SesionRequerida": {
+        "description": "Falta un token de acceso válido.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Error"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorGateway"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "Prohibido": {
+        "description": "El directorio o el rol impide la operación.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Error"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorGateway"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "FueraDeAlcance": {
+        "description": "Registro inexistente o fuera del ámbito del usuario.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Error"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorGateway"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "MetodoNoPermitido": {
+        "description": "El controlador requiere POST.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "La operación entra en conflicto con el estado actual.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "MuyGrande": {
+        "description": "El cuerpo JSON supera el límite admitido por el controlador.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "TipoDeContenido": {
+        "description": "El controlador requiere Content-Type application/json.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "LimiteDePeticiones": {
+        "description": "API Gateway limitó la tasa de solicitudes.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorGateway"
+            }
+          }
+        }
+      },
+      "ServicioOcupado": {
+        "description": "El servicio o una dependencia no está disponible.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     }
   },
@@ -29,34 +666,55 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {}
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Panel"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Todos los roles."
       }
     },
     "/api/cliente": {
@@ -94,27 +752,58 @@
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "cliente"
+                  ],
+                  "properties": {
+                    "cliente": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": 1
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Operador y administrador."
       }
     },
     "/api/emitir": {
@@ -141,7 +830,8 @@
                   "clave": {
                     "type": "string",
                     "format": "uuid",
-                    "description": "Reutiliza la misma clave al reintentar la misma factura."
+                    "description": "Reutiliza la misma clave al reintentar la misma factura.",
+                    "maxLength": 80
                   },
                   "conceptos": {
                     "type": "array",
@@ -212,19 +902,29 @@
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comprobante"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
             "description": "Conflicto con el estado actual. Si cambió el total, la operación se revierte y el operador debe revisar el resumen antes de volver a confirmar.",
@@ -247,10 +947,20 @@
               }
             }
           },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
+          },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Operador y administrador. La misma clave permite reintentar una emisión."
       }
     },
     "/api/comprobante": {
@@ -269,36 +979,58 @@
                 "properties": {
                   "factura": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 1000000000
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comprobante"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Todos los roles. El operador consulta sus facturas."
       }
     },
     "/api/pago": {
@@ -319,46 +1051,69 @@
                 "properties": {
                   "factura": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 1000000000
                   },
                   "referencia": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 160
+                    "maxLength": 64
                   },
                   "importe": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Centavos de MXN"
+                    "description": "Centavos de MXN",
+                    "maximum": 1000000000
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComprobantePago"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Operador y administrador. La referencia se controla dentro del folio."
       }
     },
     "/api/cancelar": {
@@ -378,41 +1133,63 @@
                 "properties": {
                   "factura": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 1000000000
                   },
                   "motivo": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 160
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comprobante"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Administrador. La cancelación de una factura con pagos se rechaza."
       }
     },
     "/api/cierre": {
@@ -431,36 +1208,76 @@
                 "properties": {
                   "periodo": {
                     "type": "string",
-                    "example": "2026-10"
+                    "example": "2026-10",
+                    "minLength": 7,
+                    "maxLength": 10,
+                    "pattern": "^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$",
+                    "description": "Día (AAAA-MM-DD) o mes (AAAA-MM) válidos que ya terminaron."
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "periodo",
+                    "neto"
+                  ],
+                  "properties": {
+                    "periodo": {
+                      "type": "string"
+                    },
+                    "neto": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Importe neto en centavos de MXN."
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Administrador. El periodo de calendario debe haber concluido."
       }
     },
     "/api/saldos": {
@@ -472,35 +1289,86 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {}
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "paginado"
+                    ],
+                    "properties": {
+                      "paginado": {
+                        "type": "boolean",
+                        "enum": [
+                          true
+                        ]
+                      },
+                      "despues_de": {
+                        "$ref": "#/components/schemas/CursorCartera"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "Con {} devuelve hasta 200 filas. Con paginado en true devuelve una página ordenada por vence y folio. Pasa el cursor anterior como despues_de en la solicitud siguiente."
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/FilasCartera"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PaginaCartera"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Operador, administrador y auditor. El operador ve las facturas de su ámbito."
       }
     },
     "/api/asignar": {
@@ -523,45 +1391,83 @@
                     "minItems": 1,
                     "items": {
                       "type": "integer",
-                      "minimum": 1
-                    }
+                      "minimum": 1,
+                      "maximum": 1000000000
+                    },
+                    "maxItems": 100,
+                    "uniqueItems": true
                   },
                   "caracteristicas": {
                     "type": "array",
                     "minItems": 1,
                     "items": {
                       "type": "integer",
-                      "minimum": 1
-                    }
+                      "minimum": 1,
+                      "maximum": 1000000000
+                    },
+                    "maxItems": 50,
+                    "uniqueItems": true
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "asignaciones_solicitadas"
+                  ],
+                  "properties": {
+                    "asignaciones_solicitadas": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5000
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Administrador. Se cuentan los pares solicitados, incluidos los ya existentes."
       }
     },
     "/api/tarifa": {
@@ -581,41 +1487,82 @@
                 "properties": {
                   "servicio": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 1000000000
                   },
                   "precio": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Centavos de MXN"
+                    "description": "Centavos de MXN",
+                    "maximum": 10000000
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "servicio",
+                    "precio"
+                  ],
+                  "properties": {
+                    "servicio": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": 1
+                    },
+                    "precio": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": 0,
+                      "description": "Centavos de MXN."
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Administrador. El precio nuevo se recibe en centavos."
       }
     },
     "/api/auditoria": {
@@ -628,34 +1575,59 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {}
+                "properties": {},
+                "additionalProperties": false
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventoAuditoria"
+                  },
+                  "maxItems": 100
+                }
+              }
+            }
           },
           "400": {
-            "description": "Datos inválidos"
+            "$ref": "#/components/responses/EntradaInvalida"
           },
           "401": {
-            "description": "Iniciar sesión"
+            "$ref": "#/components/responses/SesionRequerida"
           },
           "403": {
-            "description": "Rol sin permiso"
+            "$ref": "#/components/responses/Prohibido"
           },
           "404": {
-            "description": "Registro fuera de alcance"
+            "$ref": "#/components/responses/FueraDeAlcance"
+          },
+          "405": {
+            "$ref": "#/components/responses/MetodoNoPermitido"
           },
           "409": {
-            "description": "Conflicto con el estado actual"
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "413": {
+            "$ref": "#/components/responses/MuyGrande"
+          },
+          "415": {
+            "$ref": "#/components/responses/TipoDeContenido"
+          },
+          "429": {
+            "$ref": "#/components/responses/LimiteDePeticiones"
           },
           "503": {
-            "description": "Servicio temporalmente no disponible"
+            "$ref": "#/components/responses/ServicioOcupado"
           }
-        }
+        },
+        "description": "Administrador y auditor. Devuelve los eventos recientes disponibles en el índice de DynamoDB."
       }
     }
   }

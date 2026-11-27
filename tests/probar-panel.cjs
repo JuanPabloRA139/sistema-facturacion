@@ -11,14 +11,30 @@ const navegador = process.argv[2];
 if (!navegador) throw new Error('Indica la ruta de Chrome o Edge.');
 
 function preparar(){
-  const estado = window.prueba = {accesos:0, envios:[], autenticado:false};
+  const estado = window.prueba = {accesos:0, envios:[], autenticado:sessionStorage.getItem('fixture:sesion')==='activa'};
   window.fetch = async(url, opciones)=>{
     const accion=url.split('/').pop(), p=JSON.parse(opciones.body);
     const respuesta=(valor,status=200)=>new Response(JSON.stringify(valor),{status});
-    if(accion==='entrar'){estado.accesos++;estado.autenticado=true;return respuesta({});}
-    if(!estado.autenticado)return respuesta({error:'Inicia sesión.'},401);
-    if(accion==='inicio')return respuesta({rol:'operador',usuario:'prueba-ui',tasas:{iva:1600,retencion:400},
+    if(accion==='entrar'){
+      estado.accesos++;
+      estado.autenticado=true;
+      sessionStorage.setItem('fixture:sesion','activa');
+      const vence=Date.now()+3600000;
+      sessionStorage.setItem('fixture:vence',String(vence));
+      return respuesta({usuario:'prueba-ui',prueba_sesion:'prueba-de-pestana',sesion_vence_ms:vence});
+    }
+    if(!estado.autenticado || opciones.headers['X-Facturacion-Sesion']!=='prueba-de-pestana'){
+      return respuesta({error:'Inicia sesión.'},401);
+    }
+    if(accion==='inicio')return respuesta({rol:'operador',usuario:'prueba-ui',sesion_vence_ms:Number(sessionStorage.getItem('fixture:vence')),tasas:{iva:1600,retencion:400},
       clientes:[{id:1,nombre:"O'Connor & Hijos <Norte>"}],servicios:[{id:1,nombre:'Consultoría',precio:10500}],caracteristicas:[],facturas:[]});
+    if(accion==='saldos' && p.paginado===true){
+      const cursor={vence:'2026-11-21',folio:200};
+      if(p.despues_de && (p.despues_de.folio!==cursor.folio || p.despues_de.vence!==cursor.vence))
+        throw new Error('Cursor de saldos inesperado');
+      return respuesta(p.despues_de?{filas:[{folio:201,saldo:6760}],siguiente:null}
+        :{filas:[{folio:200,saldo:11760}],siguiente:cursor});
+    }
     if(accion==='emitir'){
       estado.envios.push(p);
       if(estado.envios.length===1)throw new Error('Respuesta interrumpida');
@@ -42,10 +58,17 @@ async function recorrido(){
   }
   try {
     await esperar(()=>!id('acceso').inert,'inicio bloqueado');
-    const login=id('login');login.elements.clave.value='clave temporal';
-    login.requestSubmit();login.requestSubmit();
-    await esperar(()=>!id('trabajo').hidden&&!id('trabajo').inert,'acceso incompleto');
-    afirmar(prueba.accesos===1,'acceso repetido');
+    if (!sessionStorage.getItem('fixture:tras-recarga')) {
+      const login=id('login');login.elements.clave.value='clave temporal';
+      login.requestSubmit();login.requestSubmit();
+      await esperar(()=>!id('trabajo').hidden&&!id('trabajo').inert,'acceso incompleto');
+      afirmar(prueba.accesos===1,'acceso repetido');
+      sessionStorage.setItem('fixture:tras-recarga','1');
+      location.reload();
+      return;
+    }
+    await esperar(()=>!id('trabajo').hidden&&!id('trabajo').inert,'la sesión no se recuperó al recargar');
+    afirmar(prueba.accesos===0,'la recarga volvió a enviar la clave');
     id('cliente').value='1';id('cliente').dispatchEvent(new Event('change'));
     afirmar(id('cliente').selectedOptions[0].textContent==="O'Connor & Hijos <Norte>",'nombre alterado');
     afirmar(id('emitir').disabled,'emisión vacía disponible');
@@ -68,6 +91,25 @@ async function recorrido(){
     afirmar(!id('resultado').querySelector('norte')&&id('resultado').textContent.includes('<Norte>'),'el nombre dejó de ser texto');
     afirmar(id('emitir').disabled&&!sessionStorage.getItem('facturacion:emision:prueba-ui'),'no se limpió el envío');
     afirmar(document.documentElement.scrollWidth<=innerWidth+1,'desbordamiento horizontal');
+    await esperar(()=>!id('trabajo').inert,'envío aún pendiente');
+    document.querySelector('button[data-vista="reportes"]').click();
+    await esperar(()=>!id('trabajo').inert,'vista de reportes pendiente');
+    id('antiguedad').click();
+    await esperar(()=>!id('trabajo').inert && id('resultado').querySelector('nav button'),'falta continuación de saldos');
+    const folio=()=>id('resultado').querySelector('tbody td').textContent;
+    const avanzar=id('resultado').querySelector('nav button');
+    afirmar(folio()==='200' && avanzar.textContent==='Siguiente','primera página incorrecta');
+    avanzar.click();
+    await esperar(()=>!id('trabajo').inert && folio()==='201','segunda página incorrecta');
+    const volver=id('resultado').querySelector('nav button');
+    afirmar(volver.textContent==='Anterior' && id('resultado').textContent.includes('67.60'),'navegación final o importe incorrectos');
+    volver.click();
+    await esperar(()=>!id('trabajo').inert && folio()==='200','regreso a primera página incorrecto');
+    prueba.autenticado=false;
+    let estadoCaducado;
+    try {await api('inicio');} catch(e){estadoCaducado=e.estado;}
+    afirmar(estadoCaducado===401&&!id('acceso').hidden&&id('trabajo').hidden,'sesión vencida visible');
+    afirmar(!sessionStorage.getItem('facturacion:prueba-sesion'),'credencial vencida en la pestaña');
     document.body.dataset.veredicto='aprobado';
   } catch(e){document.body.dataset.veredicto='fallo '+e.message;}
   console.log('RESULTADO_PANEL='+document.body.dataset.veredicto+'|ancho='+innerWidth+'|');

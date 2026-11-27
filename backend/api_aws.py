@@ -6,7 +6,7 @@ from datetime import date
 from backend.rds import conectar, FacturacionPostgres, preparar_actor
 from backend.identidades import rol_de
 from backend.entrada import leer_objeto
-from backend.servicios import TotalModificado, ejecutar
+from backend.servicios import CAMPOS, TotalModificado, ejecutar
 
 
 def serializar(valor):
@@ -43,6 +43,10 @@ def handler(event, context):
     except (TypeError, ValueError):
         return respuesta(400, {"error": "Se requiere un objeto JSON."})
     accion = (event.get("pathParameters") or {}).get("accion")
+    if accion not in CAMPOS:
+        return respuesta(400, {"error": "Operación desconocida."})
+    if datos.keys() - CAMPOS[accion]:
+        return respuesta(400, {"error": "Campos no admitidos."})
     try:
         with closing(conectar()) as db:
             with closing(db.cursor()) as cursor:
@@ -55,8 +59,8 @@ def handler(event, context):
             if accion in {"emitir","pago","cancelar","tarifa","auditoria"}:
                 from backend.auditoria_aws import exportar, recientes
                 try:
-                    exportar(db)
-                    if accion == "auditoria":
+                    enviados = exportar(db, tiempo_restante=context.get_remaining_time_in_millis)
+                    if enviados and accion == "auditoria":
                         resultado = respuesta(200, recientes())
                 except Exception:
                     print("Auditoría pendiente", getattr(context,"aws_request_id",""))

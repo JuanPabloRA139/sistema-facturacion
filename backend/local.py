@@ -16,6 +16,14 @@ def conectar(ruta):
 
 def inicializar(db):
     db.executescript((ROOT / "database/local.sql").read_text(encoding="utf-8"))
+    # La versión anterior guardaba el motivo en el evento visible. Copiarlo antes
+    # de limpiar ese campo conserva el texto y su vínculo con el folio y el actor.
+    db.execute("""INSERT INTO motivos_cancelacion(evento,motivo)
+                  SELECT id,detalle FROM auditoria WHERE accion='cancelación' AND detalle<>''
+                  ON CONFLICT(evento) DO NOTHING""")
+    db.execute("""UPDATE auditoria SET detalle='' WHERE accion='cancelación' AND detalle<>''
+                  AND EXISTS (SELECT 1 FROM motivos_cancelacion m
+                              WHERE m.evento=auditoria.id AND m.motivo=auditoria.detalle)""")
     db.executemany("INSERT OR IGNORE INTO usuarios_roles VALUES(?,?)", ROLES.items())
     familias = ["Consultoría", "Soporte", "Diseño", "Mantenimiento", "Capacitación"]
     db.executemany("INSERT OR IGNORE INTO servicios VALUES(?,?,?)", [
@@ -46,7 +54,8 @@ def filas(db, sql, args=()):
     return [dict(fila) for fila in db.execute(sql,args)]
 
 def evento(db,u,accion,entidad,detalle=""):
-    db.execute("INSERT INTO auditoria(usuario,accion,entidad,detalle) VALUES(?,?,?,?)",(u,accion,str(entidad),detalle))
+    return db.execute("INSERT INTO auditoria(usuario,accion,entidad,detalle) VALUES(?,?,?,?)",
+                      (u,accion,str(entidad),detalle)).lastrowid
 
 def visible(db, u, fid):
     f = db.execute("SELECT * FROM facturas WHERE id=? AND (usuario=? OR ?)",(numero(fid),u,ROLES[u]!="operador")).fetchone()
@@ -141,7 +150,8 @@ class FacturacionSQLite:
             exigir(pagado(self.db,f["id"])==0,"Solo se pueden cancelar facturas sin pagos registrados.")
             self.db.execute("UPDATE facturas SET estado='cancelada' WHERE id=?",(f["id"],))
             self.db.execute("INSERT INTO movimientos(fecha,factura,concepto,importe) VALUES(?,?,'reversion',?)",(str(date.today()),f["id"],-f["total"]))
-            evento(self.db,self.usuario,"cancelación",f["id"],motivo)
+            evento_id = evento(self.db,self.usuario,"cancelación",f["id"])
+            self.db.execute("INSERT INTO motivos_cancelacion(evento,motivo) VALUES(?,?)", (evento_id, motivo))
 
     def cambiar_tarifa(self, sid, precio):
         antes=self.db.execute("SELECT precio FROM servicios WHERE id=?",(sid,)).fetchone()
@@ -154,10 +164,18 @@ class FacturacionSQLite:
     def asignar(self, servicios, caracteristicas):
         self.db.executemany("INSERT OR IGNORE INTO caracteristicas_servicio VALUES(?,?)",[(numero(s),numero(c)) for s in servicios for c in caracteristicas])
 
-    def saldos(self):
-        return filas(self.db,"""SELECT f.id AS folio,f.vence,max(0,CAST(julianday(?) - julianday(f.vence) AS INTEGER)) AS dias_vencidos,
-           f.total-coalesce(sum(p.importe),0) AS saldo FROM facturas f LEFT JOIN pagos p ON p.factura=f.id
-           WHERE f.estado IN ('emitida','parcial') AND (f.usuario=? OR ?) GROUP BY f.id ORDER BY f.vence LIMIT 200""",(str(date.today()),self.usuario,ROLES[self.usuario]!="operador"))
+    def saldos(self, *, paginado=False, despues_de=None):
+        fecha = despues_de["vence"] if despues_de else ""
+        folio = despues_de["folio"] if despues_de else 0
+        return filas(self.db, """
+            SELECT f.id AS folio, f.vence,
+                   max(0, CAST(julianday(?) - julianday(f.vence) AS INTEGER)) AS dias_vencidos,
+                   f.total - coalesce((SELECT sum(p.importe) FROM pagos p WHERE p.factura=f.id),0) AS saldo
+            FROM facturas f
+            WHERE f.estado IN ('emitida','parcial') AND (f.usuario=? OR ?)
+              AND (f.vence,f.id) > (?,?)
+            ORDER BY f.vence,f.id LIMIT ?
+        """, (str(date.today()),self.usuario,ROLES[self.usuario]!="operador",fecha,folio,201 if paginado else 200))
 
     def cerrar(self, inicio, mensual):
         fin=inicio+timedelta(days=1) if not mensual else (inicio.replace(day=28)+timedelta(days=4)).replace(day=1)
@@ -167,7 +185,9 @@ class FacturacionSQLite:
         return self.db.execute("SELECT neto FROM cierres WHERE periodo=?",(periodo,)).fetchone()[0]
 
     def auditoria(self):
-        return filas(self.db,"SELECT * FROM auditoria ORDER BY id DESC LIMIT 100")
+        return filas(self.db,"""SELECT id,fecha,usuario,accion,entidad,
+            CASE WHEN accion='cancelación' THEN '' ELSE detalle END AS detalle
+            FROM auditoria ORDER BY id DESC LIMIT 100""")
 
 
 def operaciones(db, usuario, accion, datos):
