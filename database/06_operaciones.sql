@@ -20,6 +20,27 @@ CREATE TABLE IF NOT EXISTS auditoria_tarifas (
 CREATE INDEX IF NOT EXISTS facturas_usuario_folio ON facturas(usuario_id,folio);
 CREATE INDEX IF NOT EXISTS facturas_fecha ON facturas(fecha);
 CREATE INDEX IF NOT EXISTS reversiones_fecha ON reversiones(fecha);
+CREATE INDEX IF NOT EXISTS saldos_vencimiento ON facturas(vence,folio) WHERE estado IN ('emitida','parcial');
+
+-- Las emisiones y reversiones pueden coincidir con el cambio de día. El cierre
+-- debe ver las escrituras ya aceptadas y rechazar movimientos tardíos.
+CREATE OR REPLACE FUNCTION comprobar_periodo_abierto() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM pg_advisory_xact_lock_shared(19041, 1);
+    IF EXISTS (
+        SELECT 1 FROM cierres
+        WHERE inicio IN (NEW.fecha, date_trunc('month', NEW.fecha)::date)
+          AND NEW.fecha < fin
+    ) THEN
+        RAISE EXCEPTION 'El periodo del movimiento ya está cerrado';
+    END IF;
+    RETURN NEW;
+END; $$;
+CREATE OR REPLACE TRIGGER verificar_periodo_factura BEFORE INSERT ON facturas
+    FOR EACH ROW EXECUTE FUNCTION comprobar_periodo_abierto();
+CREATE OR REPLACE TRIGGER verificar_periodo_reversion BEFORE INSERT ON reversiones
+    FOR EACH ROW EXECUTE FUNCTION comprobar_periodo_abierto();
 
 CREATE OR REPLACE PROCEDURE registrar_pago(
     IN actor text, IN p_folio bigint, IN p_referencia text, IN p_importe numeric,
@@ -73,6 +94,7 @@ BEGIN
        THEN RAISE EXCEPTION 'Inicio de periodo inválido'; END IF;
     fin_periodo := CASE WHEN mensual THEN (inicio_periodo+interval '1 month')::date ELSE inicio_periodo+1 END;
     IF fin_periodo>CURRENT_DATE THEN RAISE EXCEPTION 'Periodo en curso'; END IF;
+    PERFORM pg_advisory_xact_lock(19041, 1);
     INSERT INTO cierres(inicio,fin,neto,actor)
     SELECT inicio_periodo,fin_periodo,coalesce(sum(m.importe),0),actor FROM (
         SELECT total AS importe FROM facturas WHERE fecha>=inicio_periodo AND fecha<fin_periodo
@@ -83,15 +105,28 @@ END; $$;
 
 CREATE OR REPLACE PROCEDURE antiguedad_saldos(IN actor text, INOUT resultado jsonb)
 LANGUAGE plpgsql AS $$
+DECLARE
+    -- El segundo argumento es NULL en las llamadas históricas. En modo página
+    -- proporciona el cursor y devuelve una fila extra para detectar la siguiente.
+    limite integer := 200;
+    desde_fecha date := '-infinity';
+    desde_folio bigint := 0;
 BEGIN
+    IF resultado @> '{"paginado":true}'::jsonb THEN
+        limite := 201;
+        IF jsonb_typeof(resultado->'despues_de') = 'object' THEN
+            desde_fecha := (resultado->'despues_de'->>'vence')::date;
+            desde_folio := (resultado->'despues_de'->>'folio')::bigint;
+        END IF;
+    END IF;
     SELECT coalesce(jsonb_agg(to_jsonb(listado) ORDER BY vence,folio),'[]') INTO resultado FROM (
         SELECT f.folio,f.vence,greatest(CURRENT_DATE-f.vence,0) AS dias_vencidos,
-               f.total-coalesce(sum(p.importe),0) AS saldo
+               f.total-coalesce((SELECT sum(p.importe) FROM pagos p WHERE p.folio=f.folio),0) AS saldo
         FROM facturas f JOIN usuarios_roles u ON u.usuario_id=actor
-        LEFT JOIN pagos p ON p.folio=f.folio
         WHERE (u.rol IN ('auditor','administrador') OR f.usuario_id=actor)
           AND f.estado IN ('emitida','parcial')
-        GROUP BY f.folio ORDER BY f.vence,f.folio LIMIT 200
+          AND (f.vence,f.folio) > (desde_fecha,desde_folio)
+        ORDER BY f.vence,f.folio LIMIT limite
     ) listado;
 END; $$;
 
