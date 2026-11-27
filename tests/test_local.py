@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date,timedelta
 from http.client import HTTPConnection
 from pathlib import Path
-from servidor import Servidor, Peticion
+from servidor import MAX_SESIONES_POR_USUARIO, Servidor, Peticion
 
 class CanalEnMemoria:
     def __init__(self,peticion):
@@ -25,10 +25,12 @@ class FlujoHTTP(unittest.TestCase):
         self.hilo=threading.Thread(target=self.s.serve_forever,daemon=True)
         self.hilo.start()
         self.tokens={}
+        self.pruebas={}
         for u in ("admin","operador","operador2","auditor"):
-            status,_,cookie=self.peticion("entrar",{"usuario":u,"clave":self.s.clave(u)})
+            status,cuerpo,cookie=self.peticion("entrar",{"usuario":u,"clave":self.s.clave(u)})
             self.assertEqual(status,200)
             self.tokens[u]=cookie.split(";")[0]
+            self.pruebas[u]=cuerpo["prueba_sesion"]
     def tearDown(self):
         self.s.shutdown();self.hilo.join();self.s.server_close();self.temp.cleanup()
     def peticion(self,accion,p,usuario=None):
@@ -36,14 +38,14 @@ class FlujoHTTP(unittest.TestCase):
             cuerpo=json.dumps(p).encode()
             cabecera=(f"POST /api/{accion} HTTP/1.0\r\nHost: 127.0.0.1:{self.s.server_port}\r\n"
                       f"Origin: {self.s.origen}\r\nContent-Type: application/json\r\n"
-                      f"Cookie: {self.tokens.get(usuario,'')}\r\nContent-Length: {len(cuerpo)}\r\n\r\n")
+                      f"Cookie: {self.tokens.get(usuario,'')}\r\nX-Facturacion-Sesion: {self.pruebas.get(usuario,'')}\r\nContent-Length: {len(cuerpo)}\r\n\r\n")
             canal=CanalEnMemoria(cabecera.encode()+cuerpo)
             Peticion(canal,("127.0.0.1",0),self.s)
             cab,contenido=canal.salida.getvalue().split(b"\r\n\r\n",1)
             cookie=next((l[12:] for l in cab.decode().splitlines() if l.startswith("Set-Cookie: ")),None)
             return int(cab.split()[1]),json.loads(contenido),cookie
         c=HTTPConnection("127.0.0.1",self.s.server_port,timeout=8)
-        c.request("POST","/api/"+accion,json.dumps(p),{"Origin":self.s.origen,"Content-Type":"application/json","Cookie":self.tokens.get(usuario,"")})
+        c.request("POST","/api/"+accion,json.dumps(p),{"Origin":self.s.origen,"Content-Type":"application/json","Cookie":self.tokens.get(usuario,""),"X-Facturacion-Sesion":self.pruebas.get(usuario,"")})
         r=c.getresponse(); data=json.loads(r.read()); cookie=r.getheader("Set-Cookie");c.close()
         return r.status,data,cookie
     def test_alta_distingue_formato_y_fecha_del_rfc(self):
@@ -143,6 +145,34 @@ class FlujoHTTP(unittest.TestCase):
             resultados=list(pool.map(lambda _:self.peticion("entrar",{"usuario":"operador","clave":"incorrecta"})[0],range(12)))
         self.assertEqual(resultados.count(401),10)
         self.assertEqual(resultados.count(429),2)
+        codigo,_,_=self.peticion("entrar",{"usuario":"auditor","clave":self.s.clave("auditor")})
+        self.assertEqual(codigo,200)
+
+    def test_limite_de_sesiones_por_cuenta(self):
+        clave = self.s.clave("operador")
+        antigua = self.tokens["operador"]
+        for _ in range(MAX_SESIONES_POR_USUARIO):
+            codigo, respuesta, cookie = self.peticion("entrar", {"usuario": "operador", "clave": clave})
+            self.assertEqual(codigo, 200)
+        self.assertNotEqual(cookie.split(";")[0], antigua)
+        self.assertEqual(self.peticion("inicio", {}, "operador")[0], 401)
+        self.tokens["operador"] = cookie.split(";")[0]
+        self.pruebas["operador"] = respuesta["prueba_sesion"]
+        self.assertEqual(self.peticion("inicio", {}, "operador")[0], 200)
+        self.assertEqual(self.peticion("inicio", {}, "auditor")[0], 200)
+
+    def test_recarga_conserva_caducidad_fijada_al_entrar(self):
+        from unittest.mock import patch
+        codigo, entrada, cookie = self.peticion("entrar", {"usuario":"operador","clave":self.s.clave("operador")})
+        self.assertEqual(codigo, 200)
+        self.tokens["operador"] = cookie.split(";")[0]
+        self.pruebas["operador"] = entrada["prueba_sesion"]
+        # Dos cargas del panel, separadas por media hora según el reloj de pared.
+        for adelantado in (0, 1800):
+            with patch("servidor.time.time", return_value=entrada["sesion_vence_ms"]/1000-3600+adelantado):
+                codigo, inicio, _ = self.peticion("inicio", {}, "operador")
+            self.assertEqual(codigo, 200)
+            self.assertEqual(inicio["sesion_vence_ms"], entrada["sesion_vence_ms"])
 
     def test_origen_tipo_cookie_y_vencimiento(self):
         import time
@@ -163,5 +193,11 @@ class FlujoHTTP(unittest.TestCase):
         self.assertIn("HttpOnly",cookie)
         self.assertIn("SameSite=Strict",cookie)
         sid=self.tokens["operador"].split("=",1)[1]
-        self.s.sesiones[sid]=("operador",time.monotonic()-1)
+        self.s.sesiones[sid]=("operador",time.monotonic()-1,self.pruebas["operador"])
         self.assertEqual(self.peticion("inicio",{},"operador")[0],401)
+
+    def test_sesion_local_requiere_ambas_partes(self):
+        prueba = self.pruebas.pop("operador")
+        self.assertEqual(self.peticion("inicio", {}, "operador")[0], 401)
+        self.pruebas["operador"] = prueba
+        self.assertEqual(self.peticion("inicio", {}, "operador")[0], 200)

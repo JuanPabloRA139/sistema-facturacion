@@ -52,6 +52,9 @@ class SeguridadTest(unittest.TestCase):
         for cambios,codigo in (({"requestContext":{}},401),({"headers":{}},415),({"body":"[]"},400),
                                ({"body":"a"*45001},413),({"body":"{}","isBase64Encoded":True},400)):
             self.assertEqual(api({**evento,**cambios},None)["statusCode"],codigo)
+        evento["body"] = "{}"
+        self.assertEqual(api({**evento, "pathParameters": {"accion": "desconocida"}}, None)["statusCode"], 400)
+        self.assertEqual(api({**evento, "body": '{"extra":true}', "pathParameters": {"accion": "inicio"}}, None)["statusCode"], 400)
         conectar.assert_not_called()
 
 
