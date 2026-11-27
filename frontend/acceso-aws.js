@@ -1,7 +1,7 @@
 'use strict';
 // Solo el verificador de PKCE y el estado viven durante la redirección.
 window.accesoAWS = (() => {
-  let token, config;
+  let token, vence, config;
   const retorno = location.origin + '/';
   const base64url = bytes => btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
   const azar = () => base64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -46,22 +46,28 @@ window.accesoAWS = (() => {
       code:params.get('code'),redirect_uri:retorno,code_verifier:guardado.verificador});
     const r=await fetch(config.dominio+'/oauth2/token',{method:'POST',body,signal:AbortSignal.timeout(20000)});
     if(!r.ok) throw new Error('No se pudo completar el acceso.');
-    token=(await r.json()).access_token;
-    if (!token) throw new Error('No se recibió la sesión.');
+    const credencial=await r.json();
+    // La API valida la firma. El navegador usa exp exclusivamente para borrar su vista a tiempo.
+    const contenido=credencial.access_token?.split('.')[1];
+    if(!contenido)throw new Error('No se recibió la sesión.');
+    const {exp}=JSON.parse(atob(contenido.replaceAll('-','+').replaceAll('_','/')));
+    if(!Number.isSafeInteger(exp)||exp*1000<=Date.now())throw new Error('La sesión ha caducado.');
+    vence=exp*1000;
+    token=credencial.access_token;
     estadoBoton('Cargando tu menú…', true);
     return true;
   }
   function salir(){
-    token=undefined;
+    token=vence=undefined;
     location.assign(config.dominio+'/logout?'+new URLSearchParams({client_id:config.cliente,logout_uri:retorno}));
   }
   function reintentar() {
-    token=undefined;
+    token=vence=undefined;
     if (config && boton.onclick) disponible();
     else {
       estadoBoton('Reintentar acceso', false);
       boton.onclick = () => location.reload();
     }
   }
-  return {preparar,salir,reintentar,cabeceras:()=>token ? {Authorization:'Bearer '+token} : {}};
+  return {preparar,salir,reintentar,caduca:()=>vence,cabeceras:()=>token ? {Authorization:'Bearer '+token} : {}};
 })();

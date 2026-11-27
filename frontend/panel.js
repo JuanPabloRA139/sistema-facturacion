@@ -5,31 +5,104 @@ const moneda = centavos => mxn.format(centavos / 100);
 const importes = new Set(['precio','saldo','pagado','total','subtotal','descuento','iva','retencion','importe','neto']);
 const vistas = {emision:'Nueva factura',clientes:'Clientes',historial:'Facturas y pagos',reportes:'Reportes',catalogo:'Catálogo'};
 let datos, conceptos = [], clave, pendiente = false, envio;
+let versionSesion=0, caducaSesion, temporizadorSesion;
+const llaveSesionLocal = 'facturacion:prueba-sesion';
+let pruebaSesionLocal;
+if (!window.accesoAWS) {
+  try { pruebaSesionLocal = sessionStorage.getItem(llaveSesionLocal); } catch { /* sesión solo en memoria */ }
+}
+
+function guardarPruebaLocal(prueba) {
+  pruebaSesionLocal = prueba;
+  try {
+    if (prueba) sessionStorage.setItem(llaveSesionLocal, prueba);
+    else sessionStorage.removeItem(llaveSesionLocal);
+  } catch { /* El acceso continúa en memoria cuando el navegador bloquea el almacenamiento. */ }
+}
 
 function mensaje(texto, error=false) {
   el('mensaje').textContent=texto;
   el('mensaje').dataset.error=String(error);
 }
+function errorSesion(){
+  return Object.assign(new Error('La sesión terminó. Vuelve a iniciar sesión.'),{estado:401});
+}
+function comprobarVigencia(){
+  if(caducaSesion===undefined || Date.now()<caducaSesion)return true;
+  mostrarAcceso(); mensaje('La sesión terminó. Vuelve a iniciar sesión.');
+  return false;
+}
+function programarCaducidad(limite){
+  if(!Number.isSafeInteger(limite)){
+    mostrarAcceso();
+    throw errorSesion();
+  }
+  caducaSesion=limite;
+  window.clearTimeout(temporizadorSesion);
+  if(!comprobarVigencia())throw errorSesion();
+  function esperar(){
+    if(caducaSesion===limite && comprobarVigencia()){
+      temporizadorSesion=window.setTimeout(esperar, Math.min(2147483647,Math.max(1,limite-Date.now())));
+    }
+  }
+  esperar();
+}
 async function api(accion, objeto={}) {
+  if(accion!=='entrar' && !comprobarVigencia())throw errorSesion();
+  const version=versionSesion;
   let respuesta, cuerpo;
   try {
-    respuesta=await fetch('/api/'+accion,{method:'POST',headers:{'Content-Type':'application/json',...window.accesoAWS?.cabeceras()},body:JSON.stringify(objeto),signal:AbortSignal.timeout(30000)});
+    const headers = {'Content-Type':'application/json', ...window.accesoAWS?.cabeceras()};
+    if (!window.accesoAWS && pruebaSesionLocal) headers['X-Facturacion-Sesion'] = pruebaSesionLocal;
+    respuesta=await fetch('/api/'+accion,{method:'POST',headers,redirect:'error',body:JSON.stringify(objeto),signal:AbortSignal.timeout(30000)});
     cuerpo=await respuesta.json();
-  } catch {throw new Error('No se recibió la respuesta. Comprueba tu conexión antes de reintentar.');}
+  } catch {
+    if(version!==versionSesion || !comprobarVigencia())throw errorSesion();
+    throw new Error('No se recibió la respuesta. Comprueba tu conexión antes de reintentar.');
+  }
+  if(version!==versionSesion || !comprobarVigencia())throw errorSesion();
   if(!respuesta.ok) {
     if(respuesta.status===401 && accion!=='entrar') mostrarAcceso();
     const error=new Error(cuerpo.error || 'No se pudo completar la operación.');
     error.estado=respuesta.status;
     throw error;
   }
+  if (!window.accesoAWS && (accion==='entrar' || accion==='inicio')){
+    programarCaducidad(cuerpo.sesion_vence_ms);
+    if(accion==='entrar'){
+      versionSesion++;
+      guardarPruebaLocal(cuerpo.prueba_sesion);
+    }
+  }
   return cuerpo;
 }
 function mostrarAcceso(){
+  versionSesion++;
+  caducaSesion=undefined;
+  window.clearTimeout(temporizadorSesion);
+  if(pendiente)pendiente();
+  if (!window.accesoAWS) guardarPruebaLocal(undefined);
   window.accesoAWS?.reintentar();
+  limpiarEnviosDeOtrasCuentas();
+  limpiarVistaPrivada();
+}
+function limpiarEnviosDeOtrasCuentas(conservar){
+  try {
+    for(let indice=sessionStorage.length-1;indice>=0;indice--){
+      const llave=sessionStorage.key(indice);
+      if(llave?.startsWith('facturacion:emision:') && llave!==conservar)sessionStorage.removeItem(llave);
+    }
+  } catch { /* El navegador puede bloquear el almacenamiento de la pestaña. */ }
+}
+function limpiarVistaPrivada(){
   datos=undefined; conceptos=[]; envio=undefined; clave=undefined; el('retomar').hidden=true;
   for(const id of ['trabajo','perfil','salida']) el(id).hidden=true;
   el('acceso').hidden=false; el('ruta').textContent='Acceso'; el('estado').textContent='Acceso seguro';
-  for(const id of ['menu','resultado','lineas','facturas','cliente','servicio','identidad']) el(id).replaceChildren();
+  const dialogo=el('confirmacion');
+  if(dialogo.open)dialogo.close('volver');
+  for(const id of ['menu','resultado','lineas','facturas','identidad','titulo','pregunta','detalle-confirmacion',
+                    'total','subtotal','descuento','iva','retencion','mensaje'])el(id).replaceChildren();
+  document.querySelectorAll('#trabajo select').forEach(select=>select.replaceChildren());
   document.querySelectorAll('#trabajo form, #login').forEach(form=>form.reset());
 }
 function nodo(tipo,texto){const n=document.createElement(tipo); n.textContent=texto; return n;}
@@ -38,16 +111,21 @@ function boton(texto,accion){
 }
 async function tarea(accion,control){
   if(pendiente) return;
-  pendiente=true; mensaje('');
+  mensaje('');
   const bloques=['acceso','retomar','trabajo','menu','perfil','salida'].map(el);
   bloques.forEach(b=>b.inert=true);
   const etiqueta=control?.textContent;
   if(control){control.disabled=true;control.textContent='En proceso…';}
-  try {await accion();}
-  catch(e){mensaje(e.message,true);}
-  finally {
-    pendiente=false; bloques.forEach(b=>b.inert=false);
+  function desbloquear(){
+    pendiente=false;
+    bloques.forEach(b=>b.inert=false);
     if(control){control.disabled=false;control.textContent=etiqueta;}
+  }
+  pendiente=desbloquear;
+  try {await accion();}
+  catch(e){if(pendiente===desbloquear)mensaje(e.message,true);}
+  finally {
+    if(pendiente===desbloquear)desbloquear();
     if(datos) actualizarResumen();
   }
 }
@@ -71,7 +149,14 @@ function confirmar(titulo,detalle,etiqueta){
   const d=el('confirmacion');
   el('pregunta').textContent=titulo;el('detalle-confirmacion').textContent=detalle;el('aceptar').textContent=etiqueta;
   d.returnValue='volver';
-  return new Promise(resolve=>{d.addEventListener('close',()=>resolve(d.returnValue==='aceptar'),{once:true});d.showModal();});
+  return new Promise(resolve=>{
+    d.addEventListener('close',()=>{
+      el('pregunta').textContent='';
+      el('detalle-confirmacion').textContent='';
+      resolve(d.returnValue==='aceptar');
+    },{once:true});
+    d.showModal();
+  });
 }
 function tabla(registros,seleccionar){
   if(!registros.length)return nodo('p','Sin registros.');
@@ -123,9 +208,10 @@ async function recargar(){
   actualizarResumen();
 }
 async function realizado(texto){
+  const version=versionSesion;
   mensaje(texto);
   try {await recargar();}
-  catch {mensaje(texto+' No se pudo actualizar la vista. Vuelve a entrar para consultarla.',true);}
+  catch {if(version===versionSesion)mensaje(texto+' No se pudo actualizar la vista. Vuelve a entrar para consultarla.',true);}
 }
 const llaveEnvio=()=> 'facturacion:emision:'+datos.usuario;
 async function entrar(){
@@ -140,6 +226,7 @@ async function entrar(){
   el('sec-cobro').hidden=auditor;el('sec-cancelacion').hidden=!admin;el('sec-cerrar').hidden=!admin;el('eventos').hidden=datos.rol==='operador';
   verVista(auditor?'historial':'emision');
   clave=crypto.randomUUID();
+  limpiarEnviosDeOtrasCuentas(auditor ? undefined : llaveEnvio());
   if(!auditor){
     let previo;
     try {previo=sessionStorage.getItem(llaveEnvio());} catch {mensaje('Habilita el almacenamiento de la pestaña para emitir facturas.',true);}
@@ -154,8 +241,13 @@ async function entrar(){
   actualizarResumen();
 }
 el('salir').onclick=()=>tarea(async()=>{
-  if(!await confirmar('¿Cerrar sesión?',conceptos.length&&!envio?'Se descartarán los conceptos del borrador.':'Para continuar tendrás que identificarte de nuevo.','Cerrar sesión')) return;
-  if(window.accesoAWS) return window.accesoAWS.salir();
+  const detalle=envio?'Hay una emisión pendiente de verificar. Si cierras sesión se quitará el borrador. Consulta las facturas recientes antes de volver a emitir.':
+    conceptos.length?'Se descartarán los conceptos del borrador.':'Para continuar tendrás que identificarte de nuevo.';
+  if(!await confirmar('¿Cerrar sesión?',detalle,'Cerrar sesión')) return;
+  if(window.accesoAWS){
+    mostrarAcceso();
+    return window.accesoAWS.salir();
+  }
   await api('salir');mostrarAcceso();mensaje('Sesión cerrada.');
 });
 async function cargarSesion(){
@@ -276,10 +368,32 @@ formulario('cerrar',async p=>{
   if(!await confirmar('¿Generar el cierre?', 'Periodo '+p.periodo+'. Se conservará el importe de este cierre.','Generar cierre'))return;
   mostrar('Cierre de periodo',tabla([await api('cierre',p)]));mensaje('Cierre de periodo disponible.');
 });
-el('antiguedad').onclick=()=>tarea(async()=>mostrar('Saldos y vencimientos',tabla(await api('saldos'))));
+async function mostrarSaldos(cursores=[null]){
+  const sesion=datos;
+  const peticion={paginado:true};
+  const cursor=cursores[cursores.length-1];
+  if(cursor)peticion.despues_de=cursor;
+  const {filas,siguiente}=await api('saldos',peticion);
+  if(!sesion || datos!==sesion)return;
+  const contenido=document.createElement('div');
+  contenido.append(tabla(filas));
+  if(cursores.length>1 || siguiente){
+    const navegacion=document.createElement('nav');
+    navegacion.setAttribute('aria-label','Páginas de saldos');
+    if(cursores.length>1)navegacion.append(boton('Anterior',()=>mostrarSaldos(cursores.slice(0,-1))));
+    navegacion.append(nodo('span',' Página '+cursores.length+' '));
+    if(siguiente)navegacion.append(boton('Siguiente',()=>mostrarSaldos([...cursores,siguiente])));
+    contenido.append(navegacion);
+  }
+  mostrar('Saldos y vencimientos',contenido);
+}
+el('antiguedad').onclick=()=>tarea(()=>mostrarSaldos());
 el('eventos').onclick=()=>tarea(async()=>mostrar('Eventos recientes',tabla(await api('auditoria'))));
 tarea(async()=>{
-  if(window.accesoAWS && !(await window.accesoAWS.preparar()))return;
+  if(window.accesoAWS){
+    if(!(await window.accesoAWS.preparar()))return;
+    programarCaducidad(window.accesoAWS.caduca());
+  }
   try {await cargarSesion();} catch(e){
     if(window.accesoAWS&&el('retomar').hidden)window.accesoAWS.reintentar();
     if(e.estado!==401)throw e;
@@ -288,11 +402,13 @@ tarea(async()=>{
 
 
 // Un historial restaurado debe volver a comprobar la sesión antes de mostrar datos.
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)comprobarVigencia();});
 window.addEventListener('pagehide', e=>{
   if(!e.persisted)return;
-  for(const id of ['trabajo','salida','menu','perfil'])el(id).hidden=true;
-  mensaje('');
-  const login=el('login');
-  if(login)login.elements.clave.value='';
+  versionSesion++;
+  limpiarVistaPrivada();
 });
-window.addEventListener('pageshow', e=>{if(e.persisted)location.reload();});
+window.addEventListener('pageshow', e=>{
+  comprobarVigencia();
+  if(e.persisted)location.reload();
+});
