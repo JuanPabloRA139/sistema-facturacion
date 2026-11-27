@@ -1,4 +1,6 @@
 # Entrega AWS · Sistema de Facturación y Servicios
+Las observaciones de este documento corresponden a los despliegues anteriores al endurecimiento de seguridad. Para comprobar el estado de la pila actual, consulta [operación en AWS](conexion-aws.md).
+
 ## Aplicación desplegada
 - Región us-east-1. Pila facturacion-servicios-lab. Última actualización comprobada en estado UPDATE_COMPLETE.
 - URL pública del panel: consultar la salida de API Gateway en la pila del laboratorio

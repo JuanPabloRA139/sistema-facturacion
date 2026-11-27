@@ -1,4 +1,7 @@
-# Lista de tareas
+# Plan de trabajo inicial del 19 al 26 de noviembre
+
+Esta lista conserva los nombres de archivos y las metas previstos al iniciar el proyecto. El inventario entregable, los resultados comprobados y las diferencias con el despliegue se encuentran en la [auditoría funcional del 27 de noviembre](auditoria-funcional-2026-11-27.pdf). La especificación vigente es [OpenAPI en JSON](openapi.json).
+
 Marcar una tarea después de integrar su pull request y adjuntar una prueba con datos ficticios. El reparto del equipo es A = Mauricio, B = Juan Pablo, C = Dahi y D = Martín. Las cuatro contribuciones propuestas y sus criterios de aceptación están en [el reparto por integrante](estudio/reparto.md).
 ## Preparación conjunta · 19–20
 - [ ] Crear repositorio GitHub e invitar a las cuatro cuentas con permiso de escritura. Cada persona acepta desde su cuenta. Mantener privado salvo indicación docente.

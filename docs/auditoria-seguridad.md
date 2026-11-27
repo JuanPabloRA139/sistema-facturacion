@@ -2,7 +2,7 @@
 
 **21 de noviembre de 2026 · Proyecto facturacion-local**
 
-Se revisaron el panel, el acceso local y de Cognito, los controladores HTTP y Lambda, los casos de uso, las consultas de SQLite y PostgreSQL, los procedimientos almacenados y la plantilla de infraestructura. Se ejecutaron **28 pruebas automatizadas**, 15 en Python y 13 en JavaScript. La integración local usó el controlador HTTP y bases SQLite temporales. Los resultados corresponden al código de esta carpeta.
+Se revisaron el panel, el acceso local y de Cognito, los controladores HTTP y Lambda, los casos de uso, las consultas de SQLite y PostgreSQL, los procedimientos almacenados y la plantilla de infraestructura. Se ejecutaron **28 pruebas automatizadas**, 15 en Python y 13 en JavaScript. La integración local usó el controlador HTTP y bases SQLite temporales. Estas cifras, las versiones de dependencias y las evidencias de AWS corresponden a la revisión del 21 de noviembre. Los cambios posteriores en esta copia se verifican por separado. Para las altas de Cognito y los roles de ejecución aplica el [procedimiento vigente](seguridad-despliegue.md).
 
 ## Hallazgos y correcciones
 
@@ -39,7 +39,7 @@ python -B -m unittest discover -s tests -v
 node --test tests/panel.test.cjs tests/rfc.test.cjs
 ```
 
-La prueba de navegador usa datos ficticios y una API en memoria. Se ejecuta con `node tests/probar-panel.cjs "ruta-al-ejecutable-de-Chrome-o-Edge"`.
+Las instrucciones del [README](../README.md) incluyen pruebas con PostgreSQL embebido para el directorio y los permisos del rol de aplicación. La prueba de navegador usa datos ficticios y una API en memoria. Se ejecuta con `node tests/probar-panel.cjs "ruta-al-ejecutable-de-Chrome-o-Edge"`.
 
 ## Referencias
 
